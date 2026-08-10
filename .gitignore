@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# External data symlinks -- these point outside the repo (see README.md's "External data
+# you must supply" section); git would otherwise commit them as dangling symlinks to a
+# path that only exists on the machine this repo was packaged on.
+/bio_251210.h5
+/bio_251210_rsa.h5
+/model/all_seq_dict.pkl
+/colabel/all_colabel.pkl
+/colabel/colabel_mask_all.pkl
+/model/GLAURI/mask_dict_train.pkl
+/model/GLAURI/mask_dict_valid.pkl
+
+# TensorBoard event logs -- raw training telemetry, not a reproducible/reviewable
+# artifact, and large (tens of MB per run).
+model/*/tb/
+
+# OS cruft
+.DS_Store

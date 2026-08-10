@@ -1,0 +1,5 @@
+case,channel,method,n_res_scored,n_pos,tpr@0.5,ppv@0.5,f1@0.5,auc
+5dac_A,protein,GLAURI,432,51,0.6863,0.7,0.6931,0.952
+5dac_A,nucleic,GLAURI,432,7,0.2857,0.5,0.3636,0.9879
+5dac_A,ligand,GLAURI,432,23,0.6087,0.6087,0.6087,0.9258
+5dac_A,ion,GLAURI,432,2,0.5,0.2,0.2857,0.9762
