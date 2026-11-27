@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glauri"
+version = "0.2.0"
+description = "Residue-level protein interface prediction with GLAURI"
+readme = "README.md"
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+license = "MIT"
+license-files = ["LICENSE", "NOTICE.txt", "third_party_licenses/*.txt"]
+
+[project.optional-dependencies]
+reference-graph = ["torch==2.12.0.dev20260313+cu128", "torch-geometric==2.7.0", "torch-scatter==2.1.2", "torch-cluster==1.6.3"]
+
+[project.scripts]
+glauri-infer = "infer_one:main"
+glauri-train = "model.train:main"
+glauri-evaluate = "benchmark.paper_pipeline:main"
+
+[tool.setuptools]
+py-modules = ["infer_one"]
+include-package-data = false
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements/runtime.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["model*", "src*", "benchmark*", "curation*", "colabel*", "dataset_release*", "assets*"]
+exclude = ["model.runs*", "benchmark.results*", "*__pycache__*"]
+
+[tool.setuptools.package-data]
+model = ["*.json", "configs/*.json", "GLAURI/*.json", "GLAURI/*.pt", "GLAURI/*.txt", "GLAURI/*.md", "*.sh", "*.sbatch"]
+benchmark = ["*.json", "labels/*/*.txt", "labels/*/*.csv"]
+curation = ["*.txt", "*.json", "*.pkl", "*.csv", "*.gz", "curated_validation/*.txt", "curated_validation/*.csv", "curated_validation/*.json", "curated_validation/*.pkl"]
+assets = ["*.json"]
+colabel = ["*.html", "*.md", "requirements.txt", "static/*.js", "static/*.json"]

@@ -1,4 +1,6 @@
-"""
+"""Compute an isolated-chain, heavy-atom RSA sidecar without modifying the source H5.
+
+The Shrake-Rupley implementation and constants match the current training pipeline.
   python add_sasa_to_h5.py --limit 64 --workers 4 --out /tmp/rsa_test.h5   # small-scale test
   python add_sasa_to_h5.py --workers 32                                    # full run (resumable: re-run skips completed keys)
 """
@@ -266,7 +268,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     default_h5 = os.path.normpath(os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), '..', 'bio_251210.h5'))
+        os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'bio_251210.h5'))
     ap.add_argument('--h5', default=default_h5, help='main h5 (read-only)')
     ap.add_argument('--out', default=None, help='sidecar output path; default <main h5 minus .h5>_rsa.h5')
     ap.add_argument('--workers', type=int, default=16)
@@ -276,6 +278,9 @@ def main():
     ap.add_argument('--device', default='cuda', choices=['cuda', 'cpu'],
                     help="cuda=single-process GPU compute (default, requires torch+cuda); cpu=multiprocess CPU")
     args = ap.parse_args()
+    if args.workers <= 0 or args.chunksize <= 0 or args.limit < 0:
+        ap.error('--workers/--chunksize must be positive; --limit must be nonnegative')
+    if not os.path.isfile(args.h5): ap.error(f'Source H5 does not exist: {args.h5}')
 
     if args.out:
         out_path = args.out
@@ -283,6 +288,11 @@ def main():
         out_path = args.h5[:-3] + '_rsa.h5'
     else:
         out_path = args.h5 + '_rsa.h5'
+
+    source_real = os.path.realpath(args.h5)
+    output_real = os.path.realpath(out_path)
+    if source_real == output_real or (os.path.exists(out_path) and os.path.samefile(args.h5, out_path)):
+        ap.error('--out must be a separate sidecar, never the source H5')
 
     t0 = time.time()
     if args.keys_from:
@@ -382,6 +392,7 @@ def main():
             print('  ', key, msg)
         if len(fails) > 50:
             print(f'   ... {len(fails)} in total')
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':

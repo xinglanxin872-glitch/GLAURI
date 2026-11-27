@@ -1,3 +1,16 @@
+#!/usr/bin/env python3
+"""Build a NEW structure/contact H5 from biological assemblies or aligned structures.
+
+python curation/build_dataset.py --pdb-glob '/data/assemblies/*.pdb.gz' --out /data/new.h5
+The released H5 and its metadata order are authoritative for frozen split masks.
+Building from a different input set does not recreate that historical ordering.
+"""
+import argparse
+import sys
+from pathlib import Path
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 import re
 # import sys
 import h5py
@@ -25,7 +38,7 @@ from src.data_encoding import (
 )
 from src.dataset import StructuresDataset, save_data
 
-from config import config_data
+from curation.settings import config_data
 import pickle
 
 pt.multiprocessing.set_sharing_strategy("file_system")
@@ -37,7 +50,7 @@ global saved_chains
 # ---------------------------------------------------------------------------
 
 config_dataset = {
-    "source": "aligned_clean",  # "bio_assembly" | "aligned_clean"
+    "source": "bio_assembly",  # "bio_assembly" | "aligned_clean"
     "r_thr": 3.5,
     "max_num_atoms": 50000,
     "max_num_nn": 64,
@@ -90,17 +103,15 @@ config_dataset = {
         ]
     ),
     # --- bio_assembly ---
-    "pdb_glob": "../bio_assemblies_search_1/*.pdb.gz",
+    "pdb_glob": None,
     # --- aligned_clean ---
-    "aligned_root": "/home/lanxin/data/Interface_prediction/aligned_files",
+    "aligned_root": None,
     "aligned_glob": "*/*_clean.pdb",
     # If set, only process these sample_ids (folder names, e.g. A71EV2A-x0351a); None means all
     "sample_ids": None,
     # Alternatively, override the file list directly (highest priority)
     "pdb_filepaths": None,
-    "dataset_filepath": "../bio_assemblies_251210.h5",
-    "cluster": False,
-    "cluster_dict": "/home/zwb/xlx/Interface_prediction/data_augment/name_cluster100_dict_c100.pkl",
+    "dataset_filepath": None,
 }
 
 
@@ -160,7 +171,7 @@ def get_aligned_clean_file_list_and_naming(
         paths = sorted(cfg["pdb_filepaths"])
     else:
         root = os.path.abspath(
-            cfg.get("aligned_root", "/home/lanxin/data/Interface_prediction/aligned_files")
+            cfg["aligned_root"]
         )
         pattern = os.path.join(root, cfg.get("aligned_glob", "*/*_clean.pdb"))
         paths = sorted(glob(pattern))
@@ -223,7 +234,8 @@ def load_interface_labels(contact, t0, t1_l):
     y_ctc = y_ctc_r & y_ctc_l
 
     y = pt.zeros((shape[0], len(t1_l)), dtype=pt.bool)
-    y[ids[:, 0], pt.where(y_ctc)[1]] = True
+    contact_rows, output_columns = pt.where(y_ctc)
+    y[ids[contact_rows, 0], output_columns] = True
 
     return y
 
@@ -376,8 +388,35 @@ def store_dataset_items(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', choices=tuple(SOURCE_GETTERS), default='bio_assembly')
+    parser.add_argument('--pdb-glob', help='Quoted glob for biological-assembly *.pdb.gz inputs')
+    parser.add_argument('--aligned-root', help='Input root when --source aligned_clean')
+    parser.add_argument('--aligned-glob', default='*/*_clean.pdb')
+    parser.add_argument('--out', required=True, help='New H5 output; existing files are rejected')
+    parser.add_argument('--contact-distance', type=float, default=config_dataset['r_thr'])
+    parser.add_argument('--max-atoms', type=int, default=config_dataset['max_num_atoms'])
+    parser.add_argument('--max-nn', type=int, default=config_dataset['max_num_nn'])
+    parser.add_argument('--workers', type=int, default=4)
+    parser.add_argument('--device', default='cuda' if pt.cuda.is_available() else 'cpu')
+    parser.add_argument('--limit', type=int, default=0)
+    args = parser.parse_args()
+    if args.source == 'bio_assembly' and not args.pdb_glob:
+        parser.error('--pdb-glob is required for biological assemblies')
+    if args.source == 'aligned_clean' and not args.aligned_root:
+        parser.error('--aligned-root is required for aligned structures')
+    if args.workers < 0 or args.limit < 0 or args.contact_distance <= 0 or args.max_atoms <= 0 or args.max_nn <= 0:
+        parser.error('Invalid workers, limit, distance or size setting')
+    output = Path(args.out).expanduser().resolve()
+    if output.exists(): parser.error(f'Refusing to overwrite existing H5: {output}')
+    config_dataset.update(source=args.source, pdb_glob=args.pdb_glob,
+        aligned_root=args.aligned_root, aligned_glob=args.aligned_glob,
+        dataset_filepath=str(output), r_thr=args.contact_distance,
+        max_num_atoms=args.max_atoms, max_num_nn=args.max_nn)
     batch = resolve_source_batch(config_dataset)
     pdb_filepaths = batch["pdb_filepaths"]
+    if args.limit: pdb_filepaths = pdb_filepaths[:args.limit]
+    if not pdb_filepaths: parser.error('No structures matched the input selection')
     parse_record_id = batch["parse_record_id"]
     make_structure_key = batch["make_structure_key"]
 
@@ -388,12 +427,13 @@ if __name__ == "__main__":
         print(f"  example key: {make_structure_key(parse_record_id(pdb_filepaths[0]), 'A')}")
 
     dataset = StructuresDataset(pdb_filepaths, with_preprocessing=False)
-    dataloader = pt.utils.data.DataLoader(
-        dataset, batch_size=None, shuffle=True, num_workers=16, pin_memory=False, prefetch_factor=4
-    )
+    loader_options = dict(batch_size=None, shuffle=False, num_workers=args.workers, pin_memory=False)
+    if args.workers: loader_options['prefetch_factor'] = 4
+    dataloader = pt.utils.data.DataLoader(dataset, **loader_options)
 
-    device = pt.device("cuda")
-    with h5py.File(config_dataset["dataset_filepath"], "w", libver="latest") as hf:
+    device = pt.device(args.device)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with h5py.File(config_dataset["dataset_filepath"], "x", libver="latest") as hf:
         print("folder_length", len(dataset))
         saved_chains = 0
         mids = config_dataset["molecule_ids"].astype(np.dtype("U"))
@@ -406,10 +446,13 @@ if __name__ == "__main__":
         t1_l = [pt.from_numpy(np.where(np.isin(mids, r_types))[0]) for r_types in r_types_l]
 
         for key in config_encoding:
-            hf[f"metadata/{key}"] = config_encoding[key].astype(np.string_)
+            hf[f"metadata/{key}"] = config_encoding[key].astype('S')
 
-        hf["metadata/mids"] = config_dataset["molecule_ids"].astype(np.string_)
+        hf["metadata/mids"] = config_dataset["molecule_ids"].astype('S')
         hf.attrs["source"] = batch["source_name"]
+        hf.attrs["contact_distance_angstrom"] = config_dataset['r_thr']
+        hf.attrs["max_num_atoms"] = config_dataset['max_num_atoms']
+        hf.attrs["max_num_nn"] = config_dataset['max_num_nn']
 
         metadata_l = []
         pbar = tqdm(dataloader)
@@ -455,6 +498,7 @@ if __name__ == "__main__":
                     make_structure_key=make_structure_key,
                 )
                 chains_keys = set(m["key"] for m in metadata)
+                saved_chains += len(chains_keys)
                 metadata_l.extend(metadata)
 
                 if metadata_l:
@@ -464,15 +508,17 @@ if __name__ == "__main__":
                 print("error", pdb_filepath, e)
                 continue
 
-        hf["metadata/keys"] = np.array([m["key"] for m in metadata_l]).astype(np.string_)
+        hf["metadata/keys"] = np.array([m["key"] for m in metadata_l]).astype('S')
         hf["metadata/sizes"] = np.array([m["size"] for m in metadata_l])
-        if config_dataset["cluster"] == False:
-            hf["metadata/ckeys"] = np.array([m["ckey"] for m in metadata_l]).astype(np.string_)
-            hf["metadata/ctypes"] = np.stack(
-                np.where(np.array([m["ctype"] for m in metadata_l])), axis=1
-            ).astype(np.uint32)
-        else:
-            hf["metadata/clusters"] = np.array([m["cluster"] for m in metadata_l]).astype(np.string_)
+        hf["metadata/ckeys"] = np.array([m["ckey"] for m in metadata_l]).astype('S')
+        hf["metadata/ctypes"] = (np.stack(
+            np.where(np.array([m["ctype"] for m in metadata_l])), axis=1
+        ).astype(np.uint32) if metadata_l else np.empty((0, 3), dtype=np.uint32))
         print("saved_chains", saved_chains)
         print("structure_exceeded", structure_exceeded)
         print("failed", failed)
+
+    if not metadata_l:
+        raise SystemExit('No residue contacts were written; inspect the inputs and size/contact settings')
+    if failed:
+        raise SystemExit(f"Dataset build had {failed} failed input structures; inspect the log")

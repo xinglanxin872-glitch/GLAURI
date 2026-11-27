@@ -1,0 +1,9 @@
+{
+  "id": "w_o_co_label",
+  "paper_name": "w/o co-label",
+  "changes": {
+    "labels": {
+      "native_only": true
+    }
+  }
+}

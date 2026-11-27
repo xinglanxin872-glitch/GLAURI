@@ -1,0 +1,50 @@
+{
+  "standard_test": {
+    "paper_location": "Section 3 standard tests (the supplied figure bundle calls this Fig3AB)",
+    "models": [
+      "GLAURI"
+    ],
+    "datasets": [
+      "MaSIF-53",
+      "DNA-129",
+      "RNA-117",
+      "Zn-59",
+      "coach_test"
+    ]
+  },
+  "weighting": {
+    "paper_location": "Fig4A",
+    "models": [
+      "GLAURI",
+      "w_o_structure_set_weighting",
+      "w_o_positive_ratio_weighting"
+    ],
+    "datasets": [
+      "protein_valid",
+      "nucleic_valid",
+      "ion_valid",
+      "ligand_valid"
+    ]
+  },
+  "ablation": {
+    "paper_location": "Fig4C/D plus Fig4E/F co-label comparison",
+    "models": [
+      "GLAURI",
+      "w_o_PLM",
+      "w_o_struct",
+      "w_o_co_label",
+      "Protein",
+      "Nucleic_acid",
+      "Ion",
+      "Ligand"
+    ],
+    "datasets": [
+      "MaSIF-53",
+      "DNA-129",
+      "RNA-117",
+      "Zn-59",
+      "coach_test",
+      "allobench_test"
+    ]
+  }
+}

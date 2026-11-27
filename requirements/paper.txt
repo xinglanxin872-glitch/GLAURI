@@ -1,0 +1,4 @@
+-r runtime.txt
+matplotlib==3.10.6
+openpyxl==3.1.5
+seaborn==0.13.2

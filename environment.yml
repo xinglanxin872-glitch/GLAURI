@@ -1,60 +1,11 @@
 name: glauri
 channels:
-  - defaults
   - conda-forge
-
 dependencies:
-  - python=3.10
-  - numpy
-  - pandas
-  - scipy
-  - h5py
-  - scikit-learn
-  - tqdm
-  - matplotlib
-  - gemmi        # PDB/mmCIF I/O (src/structure_io.py)
-  - mmseqs2      # sequence clustering for the train/val/test split (curation/split/)
-  - clustalo     # sequence alignment used by a few curation/eval scripts
-  - fpocket      # ligand-pocket benchmark baseline (benchmark/results/ligand/fpocket)
-  - rdkit
+  - python=3.10.18
   - pip
-  - pip:
-      # --- PyTorch -------------------------------------------------------------
-      # model/GLAURI/model.pt was trained against torch==2.12.0.dev20260313+cu128, a
-      # CUDA-12.8 NIGHTLY build, not a stable release. Install torch/torchvision/torchaudio
-      # matching YOUR OWN CUDA toolkit first (https://pytorch.org/get-started/locally/,
-      # nightly channel if you need cu128+) -- pip installing the rest of this file without
-      # doing that first will pull whatever stable torch wheel resolves, and
-      # torch_scatter/torch_cluster below need to be built against whichever torch you end
-      # up with (their pip packages are compiled extensions, not pure Python).
-      - torch_geometric==2.7.0
-      - git+https://github.com/rusty1s/pytorch_scatter.git
-      - git+https://github.com/rusty1s/pytorch_cluster.git
-      - graphein==1.7.8
-      - proteinworkshop==0.2.5   # model/model.py's GCP (Geometric Complete Perceptron) layers
-      - omegaconf==2.3.0         # src/model_operations.py: python dict -> proteinworkshop DictConfig
-      - fair-esm==2.0.0          # plm="ESM2" branch (import esm)
-      - transformers==4.48.1     # plm="protT5" branch
-      - sentencepiece==0.2.1     # ProtT5 tokenizer
-      - biopython==1.84
-      - beartype==0.15.0         # proteinworkshop transitive dep, pinned: version-sensitive
-      - jaxtyping==0.2.38        # proteinworkshop transitive dep, pinned: version-sensitive
-      - einops==0.6.1
-      - threadpoolctl            # curation/add_sasa_to_h5.py: pin BLAS threads during RSA calc
-
-# --- esm3lib (plm="esm3"/"esmc" -- the checkpoint actually shipped, model/GLAURI, uses esm3) ---
-# NOT on PyPI under this name. src/utils_eval.py's PLM section explains why: the
-# EvolutionaryScale ESM SDK (pip name "esm") and Meta's fair-esm (pip name "fair-esm", above)
-# both want the top-level module name `esm` -- installing both normally makes the second
-# overwrite the first's files, since three OTHER deps in this env (torchdrug, proteinworkshop,
-# graphein) import `esm` and expect it to be fair-esm. Fix used here: vendor/rename the
-# EvolutionaryScale SDK's own source tree from `esm` to `esm3lib` (a mechanical rewrite of
-# ~280 clean `from esm.X import Y` lines) and leave fair-esm owning the real `esm` name.
-# Get the SDK from https://github.com/evolutionaryscale/esm (pip: `esm`, NOT `fair-esm`),
-# then rename its package directory (and internal self-imports) esm -> esm3lib. Needed only
-# if you use plm="esm3"/"esmc"; skip if you only need the ESM2/protT5 branches.
-#
-# Model weights are pulled from the local HuggingFace/torch hub cache at runtime
-# (~/.cache/huggingface/hub/models--EvolutionaryScale--esm3-sm-open-v1, etc.) --
-# not part of this file, download via each model's normal from_pretrained() the first time
-# you run with network access, or copy an existing cache dir over.
+  - zstd
+  - mmseqs2
+# Install the preserved PyTorch/CUDA and matching graph-extension wheels first.
+# Then pip install -r requirements/runtime.txt and pip install --no-deps -e .
+# Exact reference versions: requirements/reference_versions.json; setup: README.md.

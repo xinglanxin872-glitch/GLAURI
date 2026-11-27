@@ -1,0 +1,15 @@
+{
+  "id": "w_o_struct",
+  "paper_name": "w/o struct",
+  "changes": {
+    "inputs": {
+      "zero_structure": false,
+      "geometry_mode": "zero",
+      "edge_mode": "sequence",
+      "zero_rsa": true
+    },
+    "training": {
+      "coordinate_noise": 0.0
+    }
+  }
+}

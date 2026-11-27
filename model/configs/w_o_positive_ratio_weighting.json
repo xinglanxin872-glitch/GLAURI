@@ -1,0 +1,9 @@
+{
+  "id": "w_o_positive_ratio_weighting",
+  "paper_name": "w/o positive ratio weighting",
+  "changes": {
+    "loss": {
+      "task_weighting": "uniform"
+    }
+  }
+}

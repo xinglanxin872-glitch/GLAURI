@@ -1,0 +1,29 @@
+{
+  "schema": "glauri_curated_validation_v1",
+  "dataset_version": "coach420_curated_v1",
+  "seed_rule": "2025 + task column; sorted cluster IDs permuted",
+  "selection": "Native-positive chains, one representative per coarse cluster, longest sequence first; no model scores",
+  "retained_tasks": [
+    "protein",
+    "nucleic",
+    "ion"
+  ],
+  "counts": {
+    "protein": 100,
+    "nucleic": 100,
+    "ion": 100,
+    "ligand": 100
+  },
+  "unique_h5_structures": 390,
+  "valid_split_sha256": "e014692e688d50611b93a36760574689ff09c79fa4b12b4af2eb11fa1eaebb02",
+  "coarse_clusters_sha256": "6dd9ffe8410327fa4d3007c2a2a93d25de49ec5214c5512134adfec98ecca625",
+  "feature_protocol": "ca_ncac_sidechain_v1",
+  "evaluation_labels": "Binary non-ligand projected labels; ligand native maximum projected pockets with support >= 0.1; shared across all models",
+  "label_store_sha256": "03b1e56762d4956a65208052353ad89b9bd7203d2957d8c59cab755319efe061",
+  "representatives_sha256": "f68470e1fb64bba9d9dd232049d78088bdf46f99487389e51c80e4d7a2504e39",
+  "train_label_definition": {
+    "ligand_mode": "soft",
+    "support_threshold": 0.5,
+    "soft_floor": 0.25
+  }
+}

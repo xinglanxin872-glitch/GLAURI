@@ -1,0 +1,322 @@
+{
+  "valid_unique_structures": 36651,
+  "usable_reference_structures": 36599,
+  "rejected_unique_structures": 52,
+  "reasons": {
+    "ambiguous_coarse_cluster": 52
+  },
+  "rejected": [
+    {
+      "h5_key": "AE/7AE5/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/B:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/C:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/D:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/E:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/F:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/a:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/b:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/c:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/d:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/e:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE5/f:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/B:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/C:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/D:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/E:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/F:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/a:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/b:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/c:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/d:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/e:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "AE/7AE7/f:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "C5/7C52/b:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "CD/5CDW/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "E3/3E3Q/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "HP/6HPG/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "P9/6P95/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "P9/6P95/B:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "P9/6P95/C:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "P9/6P95/a:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "P9/6P95/b:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "P9/6P95/c:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "Q3/6Q3Q/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "Q3/6Q3Q/B:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "S8/7S8H/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "S8/7S8H/A:1",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "S8/7S8H/A:2",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "S8/7S8H/a:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "S8/7S8H/a:1",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "S8/7S8H/a:2",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "T5/5T5J/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "T5/5T5L/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "T5/5T5O/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "T5/5T5P/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "VK/5VK2/A:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "VK/5VK2/B:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "VK/5VK2/C:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "VK/5VK2/a:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "VK/5VK2/b:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    },
+    {
+      "h5_key": "VK/5VK2/c:0",
+      "reasons": [
+        "ambiguous_coarse_cluster"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "model": {
+    "name": "gcp",
+    "params": {
+      "gcp": {
+        "module_cfg": {
+          "orientations": true,
+          "sidechain_vector": true,
+          "norm_pos_diff": true,
+          "scalar_gate": 0,
+          "vector_gate": true,
+          "nonlinearities": [
+            "silu",
+            "silu"
+          ],
+          "max_nn": 64,
+          "r_max": 10.0,
+          "num_rbf": 8,
+          "bottleneck": 4,
+          "vector_linear": true,
+          "vector_identity": true,
+          "default_bottleneck": 4,
+          "predict_node_positions": false,
+          "predict_node_rep": true,
+          "enable_e3_equivariance": false,
+          "esm_proj_dim": 128,
+          "esm_proj_dropout": 0.3,
+          "rsa_scalar_dim": 1
+        },
+        "model_cfg": {
+          "seq_in": 1536,
+          "h_input_dim": 1572,
+          "chi_input_dim": 2,
+          "e_input_dim": 11,
+          "xi_input_dim": 1,
+          "h_hidden_dim": 128,
+          "chi_hidden_dim": 16,
+          "e_hidden_dim": 112,
+          "xi_hidden_dim": 4,
+          "num_layers": 6,
+          "output_dim": 4,
+          "dropout": 0.2
+        },
+        "layer_cfg": {
+          "pre_norm": false,
+          "use_gcp_norm": true,
+          "use_gcp_dropout": true,
+          "use_scalar_message_attention": true,
+          "num_feedforward_layers": 2,
+          "mp_cfg": {
+            "num_message_layers": 4
+          }
+        }
+      }
+    }
+  },
+  "features": {
+    "flags": [
+      false,
+      true,
+      false
+    ],
+    "preprocess": "CA_BB",
+    "protocol": "ca_ncac_sidechain_v1",
+    "plm": "esm3"
+  },
+  "metrics": {
+    "auc_eligibility": "all_active_tasks",
+    "prediction_threshold": 0.5,
+    "label_threshold": 0.5,
+    "checkpoint_selection": "mean_task_auc",
+    "tie_policy": "latest"
+  },
+  "label_invariants": {
+    "non_ligand_columns": "binary_union",
+    "native_combination": "maximum",
+    "validation_profile": "match_training"
+  },
+  "common": {
+    "training": {
+      "epochs": 2,
+      "seed": 42,
+      "batch_size": 1,
+      "learning_rate": 1.5e-05,
+      "coordinate_noise": 0.05,
+      "gradient_clip": 1.0,
+      "log_every_steps": 1024,
+      "evaluate_every_steps": 8192,
+      "workers": 8,
+      "device": "cuda"
+    },
+    "validation": {
+      "size": 2048,
+      "seed": 42
+    },
+    "loss": {
+      "positive_factors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "normalize_positive_weights": false
+    },
+    "embeddings": {
+      "attention_backend": "auto",
+      "memory_size": 128
+    }
+  },
+  "ligand_labels": {
+    "ligand_mode": "soft",
+    "support_threshold": 0.5,
+    "soft_floor": 0.25
+  }
+}

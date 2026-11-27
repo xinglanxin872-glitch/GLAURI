@@ -1,0 +1,15 @@
+{
+  "data_root": "{repo}/data",
+  "dataset": "{data_root}/bio_251210.h5",
+  "rsa": "{data_root}/bio_251210_rsa.h5",
+  "sequences": "{data_root}/all_seq_dict.pkl",
+  "base_label_store": "{data_root}/label_stores/reference_labels.pkl",
+  "ligand_interactions": "{data_root}/ligand_pocket_interactions.csv.gz",
+  "label_store_directory": "{data_root}/paper_label_stores",
+  "alignment_masks": "{data_root}/alignment_masks_ca_v1",
+  "train_split": "{repo}/curation/train_m.pkl",
+  "valid_split": "{repo}/curation/valid_m.pkl",
+  "train_weight": "{repo}/curation/train_weight.pkl",
+  "output_root": "{repo}/model/runs",
+  "embedding_cache": null
+}

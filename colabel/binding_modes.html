@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GLAURI · Binding Mode Explorer</title>
+<style>
+body{font:16px/1.6 system-ui,sans-serif;max-width:1360px;margin:40px auto;padding:0 20px;color:#243341;background:#f7f9fb}h1{margin-bottom:4px}p{color:#526477}form,article,section{background:white;border:1px solid #dce3ea;border-radius:10px;padding:20px;margin:18px 0}form,.view-controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap}label{display:flex;flex-direction:column;font-size:14px}input,select,button{font:inherit;padding:9px;border:1px solid #b8c6d3;border-radius:5px}select{max-width:440px}button{background:#265c78;color:white;cursor:pointer}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;padding:10px 8px;border-bottom:1px solid #e1e7ed}summary{cursor:pointer;color:#265c78}pre{white-space:pre-wrap;word-break:break-word;font-size:13px}.muted{color:#697c8e;font-size:14px}h3{margin-bottom:4px}#status{white-space:pre-wrap}a{color:#265c78}#viewer-grid{display:block;margin-top:18px}.molecule{position:relative;height:560px;width:100%;border:1px solid #dce3ea;border-radius:8px;overflow:hidden}.table-wrap{overflow-x:auto}@media(max-width:800px){.molecule{height:350px}body{padding:0 12px}.view-controls select{max-width:310px}}
+#reference-panel{margin-top:22px;padding-top:4px;border-top:1px solid #e1e7ed}.track-row{display:grid;grid-template-columns:205px minmax(0,1fr);align-items:center;gap:16px;padding:4px 8px;border-radius:6px}.selected-track{background:#fff6e8}.track-label{background:transparent;border:none;color:#265c78;text-align:left;padding:4px;font-size:13px}.selected-track .track-label{color:#985800;font-weight:600}#reference-tracks svg{cursor:pointer}button:disabled{opacity:.45;cursor:default}#reference-description{font-weight:500}#cartoon-panel{margin-top:22px}@media(max-width:800px){.track-row{grid-template-columns:145px minmax(0,1fr);gap:8px}.track-label{font-size:11px}}
+</style>
+<h1>GLAURI · Binding Mode Explorer</h1>
+<p>Chain name → Structure set → Binding modes across four interface types</p>
+<form id="search"><label>Chain name / full structure key<input name="chain" value="6CBZ_B" required placeholder="6CBZ_B or CB/6CBZ/B:0"></label>
+<label>Minimum participating residues (inclusive)<input name="min_residues" type="number" min="1" value="4" required></label>
+<label>Support strictly greater than<select name="min_support"><option value="0">0 (no additional support filter)</option><option value="0.1">0.1 (original statistic)</option><option value="0.2">0.2</option><option value="0.5">0.5</option></select></label><button>Search</button></form>
+<p class="muted">Participating residues are the union of reference-sequence contact sites within a mode. Default: ≥4 residues (strictly more than 3). Mode ID = original pocket_id + 1. Results describe the entire structure set. “Query chain observed” indicates whether the queried chain contributed a contact record to that mode. The representative chain is the receptor from the mode's Jaccard medoid contact; it may differ from the reference chain. Reference positions are not PDB residue numbers.</p>
+<p id="data-mode" class="muted" role="status">Checking coordinate availability…</p>
+<p id="status" role="status"></p>
+<section id="visualization" hidden>
+<h2>Binding modes along the reference sequence</h2>
+<div class="view-controls">
+<label>Structure set<select id="view-set"></select></label>
+<label id="monomer-control">Displayed monomer<select id="view-chain"></select></label>
+<label>Interface<select id="view-type"></select></label>
+<label>Binding mode<select id="view-mode"></select></label>
+<label>Displayed sites<select id="residue-rule"><option value="union">Contact-residue union (filter definition)</option><option value="consensus">Sites with contact-record coverage ≥0.5</option></select></label>
+<button type="button" id="view-focus" disabled>Focus pocket</button><button type="button" id="view-reset" disabled>Reset view</button>
+<button type="button" id="view-pymol" disabled>Export PyMOL cartoon</button>
+</div>
+<div id="reference-panel">
+<h3>Reference-sequence contact map · No H5 required</h3>
+<p id="reference-description"></p>
+<p class="muted">Every strip spans the entire reference FASTA from position 1 to L, including residues absent from a structure. Colored sites are contacts; gray sites are background. Orange marks the selected mode; blue marks other retained modes. Colors encode binary membership, not confidence or contact frequency.</p>
+<div class="track-row"><span class="muted">Mode / support</span><div id="reference-axis"></div></div>
+<div id="reference-tracks"></div>
+<p id="reference-hover" class="muted" role="status">Hover over a strip to inspect its reference residue.</p>
+<details><summary>Reference FASTA sequence</summary><pre id="reference-fasta"></pre></details>
+</div>
+<div id="cartoon-panel" hidden><div id="viewer-grid"><div><h3>Monomer cartoon · Selected pocket in orange</h3><div class="molecule" id="monomer-view"></div></div></div></div>
+<p id="view-status" role="status"></p>
+<p class="muted">Drag to rotate, scroll to zoom, and hover to inspect structure/reference positions. Coordinates come from the native H5 monomer. Display residue IDs follow the structure sequence from 1; original PDB numbering is not stored in H5. Missing or unmapped sites are not assigned coordinates. The browser uses local 3Dmol.js cartoon rendering; the export button creates a script for PyMOL.</p>
+</section>
+<div id="results"></div>
+<script src="/static/3Dmol-min.js"></script><script src="/static/binding_viewer.js?v=reference-tracks5"></script>
+<script>
+const node=(tag,text,parent)=>{let el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(parent)parent.append(el);return el;};
+const names={protein:'Protein',nn:'Nucleic acid',ion:'Ion',ligand:'Ligand'};
+const bindingNames=names;
+const scene=new BindingScene();
+if(location.protocol==='file:')document.querySelector('#status').textContent='Open the running service at http://127.0.0.1:8765; for remote SSH, forward port 8765 first.';
+document.querySelector('#search').addEventListener('submit',async event=>{
+ event.preventDefault();const status=document.querySelector('#status'),out=document.querySelector('#results');out.replaceChildren();status.textContent='Searching…';
+ try{const query=new URLSearchParams(new FormData(event.target));const response=await fetch('/api/search?'+query);const result=await response.json();if(!response.ok)throw Error(result.error);
+ status.textContent=result.results.length?`Found ${result.results.length} structure set(s); match policy: ${result.match_policy}`:'No matching chain found. Check the chain name; the index covers original sequence-cluster members only.';
+ scene.setResult(result);
+ for(const [groupIndex,group] of result.results.entries()){const article=node('article',undefined,out);node('h2',group.structure_set,article);node('p',`${group.member_count} members; matched structures: ${group.matched_structure_keys.join(', ')}`,article);
+ const members=node('details',undefined,article);node('summary','Show all structure-set members',members);node('pre',group.members.join('\n'),members);
+ for(const [type,info] of Object.entries(group.interfaces)){node('h3',`${names[type]} · ${info.retained_modes} retained / ${info.total_modes} original modes`,article);
+ if(!info.total_modes){node('p','No retained contact records for this interface in this structure set.',article);continue;}
+ node('p',`Reference chain: ${info.reference_key}; support denominator: ${info.denominator_receptors} distinct receptor structure keys`,article);
+ const wrap=node('div',undefined,article);wrap.className='table-wrap';const table=node('table',undefined,wrap),head=node('tr',undefined,node('thead',undefined,table));for(const title of ['Mode / pocket_id','Representative chain (medoid)','Participating residues','Supporting chains / support','Contact records','Query chain observed','3D view','Details'])node('th',title,head);
+ const body=node('tbody',undefined,table);for(const mode of info.modes){const tr=node('tr',undefined,body);for(const value of [`${mode.mode_id} / ${mode.pocket_id}`,mode.representative_chain,mode.residue_count,`${mode.supporting_receptors} / ${mode.support.toFixed(4)}`,mode.contact_records,mode.query_receptor_keys.length?'Yes':'No'])node('td',String(value),tr);
+ tr.children[1].title=mode.representative.receptor_key+' | '+mode.representative.ckey;node('div',mode.representative.receptor_key,tr.children[1]).className='muted';
+ const show=node('button','Highlight pocket',node('td',undefined,tr));show.type='button';show.onclick=()=>scene.selectMode(groupIndex,type,mode.pocket_id);
+ const detail=node('details',undefined,node('td',undefined,tr));node('summary','View',detail);node('pre','Representative contact (Jaccard medoid):\n'+JSON.stringify(mode.representative,null,2)+'\n\nReference residues (1-based):\n'+mode.reference_residues.join(', ')+'\n\nReference sites with coverage ≥0.5:\n'+mode.consensus_positions_1based.join(', ')+'\n\nSupporting receptor keys:\n'+mode.receptor_keys.join('\n')+'\n\nSource contact examples:\n'+JSON.stringify(mode.examples,null,2),detail);}
+ if(!info.retained_modes)node('p','No modes for this interface pass the current filters.',article);
+ }
+ const download=node('a','Download query JSON',article);download.href=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)],{type:'application/json'}));download.download='binding_modes.json';
+ }
+ }catch(error){status.textContent=error.message;}
+});
+</script></html>

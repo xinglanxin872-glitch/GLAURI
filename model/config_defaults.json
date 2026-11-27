@@ -1,0 +1,25 @@
+{
+  "labels": {
+    "native_only": false
+  },
+  "sampling": {
+    "cluster_balanced": true
+  },
+  "loss": {
+    "task_weighting": "pos_ratio"
+  },
+  "inputs": {
+    "zero_plm": false,
+    "zero_structure": false,
+    "zero_rsa": false,
+    "geometry_mode": "full",
+    "edge_mode": "spatial",
+    "ablation_protocol": "geometry_mask_v2"
+  },
+  "active_tasks": [
+    0,
+    1,
+    2,
+    3
+  ]
+}

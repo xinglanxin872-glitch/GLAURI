@@ -1,0 +1,155 @@
+{
+  "id": "GLAURI",
+  "paper_name": "GLAURI",
+  "config_data": {
+    "dataset_filepath": "{training_project}/bio_251210.h5",
+    "rsa_filepath": "{training_project}/bio_251210_rsa.h5",
+    "features_flags": [
+      false,
+      true,
+      false
+    ],
+    "preprocess": "CA_BB",
+    "feature_protocol": "ca_ncac_sidechain_v1",
+    "max_num_nn": 64,
+    "plm": "esm3",
+    "plm_fusion": "concat",
+    "l_types": [
+      "GLU",
+      "LEU",
+      "ALA",
+      "ASP",
+      "SER",
+      "VAL",
+      "GLY",
+      "THR",
+      "ARG",
+      "PHE",
+      "TYR",
+      "ILE",
+      "PRO",
+      "ASN",
+      "LYS",
+      "GLN",
+      "HIS",
+      "TRP",
+      "MET",
+      "CYS"
+    ],
+    "r_types": [
+      [
+        "GLU",
+        "LEU",
+        "ALA",
+        "ASP",
+        "SER",
+        "VAL",
+        "GLY",
+        "THR",
+        "ARG",
+        "PHE",
+        "TYR",
+        "ILE",
+        "PRO",
+        "ASN",
+        "LYS",
+        "GLN",
+        "HIS",
+        "TRP",
+        "MET",
+        "CYS"
+      ],
+      [
+        "DA",
+        "DT",
+        "DG",
+        "DC",
+        "A",
+        "U",
+        "G",
+        "C"
+      ],
+      [
+        "MG",
+        "ZN",
+        "CA",
+        "MN",
+        "CD",
+        "CU",
+        "FE",
+        "FE2",
+        "NI",
+        "SR",
+        "CO",
+        "HG",
+        "SF4",
+        "F3S",
+        "FES"
+      ],
+      [
+        "ligand"
+      ]
+    ]
+  },
+  "config_model": {
+    "name": "gcp",
+    "params": {
+      "gcp": {
+        "module_cfg": {
+          "orientations": true,
+          "sidechain_vector": true,
+          "norm_pos_diff": true,
+          "scalar_gate": 0,
+          "vector_gate": true,
+          "nonlinearities": [
+            "silu",
+            "silu"
+          ],
+          "max_nn": 64,
+          "r_max": 10.0,
+          "num_rbf": 8,
+          "bottleneck": 4,
+          "vector_linear": true,
+          "vector_identity": true,
+          "default_bottleneck": 4,
+          "predict_node_positions": false,
+          "predict_node_rep": true,
+          "enable_e3_equivariance": false,
+          "esm_proj_dim": 128,
+          "esm_proj_dropout": 0.3,
+          "rsa_scalar_dim": 1,
+          "zero_seq_input": false,
+          "zero_struct_input": false,
+          "zero_rsa_input": false
+        },
+        "model_cfg": {
+          "seq_in": 1536,
+          "h_input_dim": 1572,
+          "chi_input_dim": 2,
+          "e_input_dim": 11,
+          "xi_input_dim": 1,
+          "h_hidden_dim": 128,
+          "chi_hidden_dim": 16,
+          "e_hidden_dim": 112,
+          "xi_hidden_dim": 4,
+          "num_layers": 6,
+          "output_dim": 4,
+          "dropout": 0.2
+        },
+        "layer_cfg": {
+          "pre_norm": false,
+          "use_gcp_norm": true,
+          "use_gcp_dropout": true,
+          "use_scalar_message_attention": true,
+          "num_feedforward_layers": 2,
+          "mp_cfg": {
+            "num_message_layers": 4
+          }
+        }
+      }
+    },
+    "noise": 0.05,
+    "feature_protocol": "ca_ncac_sidechain_v1"
+  },
+  "usage": "inference_only_existing_weights"
+}

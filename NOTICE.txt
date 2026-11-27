@@ -1,0 +1,24 @@
+GLAURI third-party sources and release status
+
+Repository-authored source code is licensed under MIT; see LICENSE.
+This grant does not relicense third-party source, pretrained weights or datasets.
+Preserved upstream license texts are under third_party_licenses/.
+
+The binding-mode browser bundles 3Dmol.js 3.0.0 (University of Pittsburgh and
+contributors), BSD-3-Clause with its included third-party notices. Its full
+license is preserved in third_party_licenses/3Dmol.txt; source/version/hash are
+recorded in colabel/static/manifest.json. https://3dmol.org/
+
+Runtime dependencies are installed separately and retain their upstream licenses.
+The esm3lib SDK namespace adapter does not distribute model weights; retain the upstream SDK license.
+ESM3 model-weight terms are independent of the SDK code license.
+Dataset redistribution rights and institutional permission remain a publication requirement.
+
+proteinworkshop 0.2.5 | MIT | https://www.proteins.sh
+graphein 1.7.8 | MIT | https://github.com/a-r-j/graphein
+fair-esm 2.0.0 | MIT | https://github.com/facebookresearch/esm
+biopython 1.84 | License :: Freely Distributable | https://biopython.org/
+torch 2.12.0.dev20260313+cu128 | BSD-3-Clause | 
+torch-geometric 2.7.0 | See upstream distribution license | 
+torch-scatter 2.1.2 | License :: OSI Approved :: MIT License | https://github.com/rusty1s/pytorch_scatter
+torch-cluster 1.6.3 | License :: OSI Approved :: MIT License | https://github.com/rusty1s/pytorch_cluster

@@ -1,0 +1,143 @@
+[
+  {
+    "id": "GLAURI",
+    "paper_name": "GLAURI",
+    "config": "model/configs/GLAURI.json",
+    "aliases": [],
+    "published_checkpoint": {
+      "path": "model/GLAURI/model_best_auc.pt",
+      "sha256": "256a07f12616aeaadf08bf9bf145dc7d0e3be76ab9301d3a74c88e2ce3a0fbfd",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "w_o_structure_set_weighting",
+    "paper_name": "w/o structure-set weighting",
+    "config": "model/configs/w_o_structure_set_weighting.json",
+    "aliases": [
+      "no_train_weight",
+      "mixsoft_posraw_no_trainweight__best_auc"
+    ],
+    "published_checkpoint": {
+      "path": "model/runs/w_o_structure_set_weighting/model_best_auc.pt",
+      "sha256": "98af35f8e8b6d08308d8735feba457412037a8d12195f1e3852c1055c6bf714d",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "w_o_positive_ratio_weighting",
+    "paper_name": "w/o positive ratio weighting",
+    "config": "model/configs/w_o_positive_ratio_weighting.json",
+    "aliases": [
+      "no_posratio",
+      "w/o pos ratio weighting",
+      "soft_ml_uniform_nonorm_r2"
+    ],
+    "published_checkpoint": {
+      "path": "model/runs/w_o_positive_ratio_weighting/model_best_auc.pt",
+      "sha256": "773248146db1964a549c1d8357db08afeda22210f368a1f1a085259e514fd369",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "w_o_PLM",
+    "paper_name": "w/o PLM",
+    "config": "model/configs/w_o_PLM.json",
+    "aliases": [
+      "zero_seq",
+      "w/o seq"
+    ],
+    "published_checkpoint": {
+      "path": "model/runs/w_o_PLM/model_best_auc.pt",
+      "sha256": "60fe153b58b22dbd77a5e153ee7d47ec2392da2d55b1f5f85a89110077cf89ff",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "w_o_struct",
+    "paper_name": "w/o struct",
+    "config": "model/configs/w_o_struct.json",
+    "aliases": [
+      "zero_struct",
+      "zero_struct_rsa"
+    ],
+    "published_checkpoint": {
+      "path": "model/runs/w_o_struct/model_best_auc.pt",
+      "sha256": "c345d105fa724d74d1477379e454ef6f5b7dc402657bc67fcdab431f282a6a46",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "w_o_co_label",
+    "paper_name": "w/o co-label",
+    "config": "model/configs/w_o_co_label.json",
+    "aliases": [
+      "nativeonly",
+      "native_only",
+      "snapshot_nativeonly",
+      "nativeonly__model_best_auc",
+      "w/o colabel"
+    ],
+    "published_checkpoint": {
+      "path": "model/runs/w_o_co_label/model_best_auc.pt",
+      "sha256": "f14281cfcee956a2058e3f0089fd5cc2c6a358f764e4133714d79449db758dcc",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "Protein",
+    "paper_name": "Protein",
+    "config": "model/configs/Protein.json",
+    "aliases": [
+      "single_protein"
+    ],
+    "group": "w/o multi-task",
+    "published_checkpoint": {
+      "path": "model/runs/Protein/model_best_auc.pt",
+      "sha256": "0786700624d1a3cf394beade6caf6c76e3dbbddb8036be9d71a8563dd4a4b824",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "Nucleic_acid",
+    "paper_name": "Nucleic acid",
+    "config": "model/configs/Nucleic_acid.json",
+    "aliases": [
+      "single_nucleic"
+    ],
+    "group": "w/o multi-task",
+    "published_checkpoint": {
+      "path": "model/runs/Nucleic_acid/model_best_auc.pt",
+      "sha256": "fac7a94484e0c2f0873d2e253d430b6eb70c3f73b4021e8601d8772fa0b46256",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "Ion",
+    "paper_name": "Ion",
+    "config": "model/configs/Ion.json",
+    "aliases": [
+      "single_ion"
+    ],
+    "group": "w/o multi-task",
+    "published_checkpoint": {
+      "path": "model/runs/Ion/model_best_auc.pt",
+      "sha256": "712ac4f6bdbfb7a5f8f7500bf33321c1e4dece4fe5c30862681984a87a1145a2",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  },
+  {
+    "id": "Ligand",
+    "paper_name": "Ligand",
+    "config": "model/configs/Ligand.json",
+    "aliases": [
+      "single_ligand"
+    ],
+    "group": "w/o multi-task",
+    "published_checkpoint": {
+      "path": "model/runs/Ligand/model_best_auc.pt",
+      "sha256": "531f87d7e1d50612eef8f3732af4ab6c8d8179316c70650e354c73724d5269df",
+      "feature_protocol": "ca_ncac_sidechain_v1"
+    }
+  }
+]

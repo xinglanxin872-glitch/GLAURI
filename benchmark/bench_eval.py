@@ -1,38 +1,14 @@
 #!/usr/bin/env python3
-"""Unified interface-prediction benchmark: score external baseline methods against
-ground-truth labels, for all 5 tasks (protein, DNA/RNA x2, ion, ligand).
+"""Score precomputed external-baseline results on the five benchmark tasks.
 
-For each (benchmark x method x chain) aligns the method's per-residue score
-(on the BOUND/experimental structure and on the PREDICTED structure) to the
-ground-truth label sequence via pairwise alignment (align_anchor: two independent
-pairwise alignments, ref-vs-bound and ref-vs-predict, intersected on ref indices),
-then scores:
-  - bound vs label   : bc_scoring (acc/ppv/npv/tpr/tnr/mcc/auc/std)
-  - predict vs label : bc_scoring
-  - bound vs predict : mae / w_mae / rmse / JS_div / ICC2_1   (pair_eval style)
-
-This script only scores EXTERNAL baseline methods (precomputed score files / raw tool
-outputs). Our own model is evaluated by model_benchmark_eval.py instead (it runs
-inference itself); this keeps "baseline scoring" and "our inference" cleanly separate.
-
-Outputs (under --outdir, default ../results):
-  benchmark_per_chain.csv  - one row per (benchmark, method, chain)
-  benchmark_summary.csv    - pooled-over-residues metrics per (benchmark, method)
-  benchmark_aligned.pkl    - per-chain {y, p_bound, p_pred, ref_idx, interface_type}
-
-2026-08: merged coach420 (ligand) into this script as a 5th benchmark entry, and merged
-in coach420_baseline_eval.py's p2rank/fpocket/grasp/protgeonet loaders (previously a
-separate script) -- results/ is now organized uniformly per interface type
-(protein/NN/ion/ligand), so the benchmark script covering all of them should be too.
-coach420's label isn't a fixed per-benchmark fasta file like the other 4 -- ref_seq is
-defined as each chain's own predict_seq, and labels are decoded per-chain from
-coach420_label.csv's token format. See BENCH["coach420"]["label"] = ("coach420csv", ...)
-and the `dynamic_label` branch in run().
-
-Needs numpy + torch + pandas + Biopython (for the coach420 structure-file loaders) and a
-`clustalo` binary on PATH.
+The ligand task is COACH420, with the complete test membership applied
+before scoring. Source labels and raw-tool files retain their original names.
+GLAURI inference is provided by model_benchmark_eval.py.
 """
 import os, sys, re, csv, glob, pickle, tempfile, subprocess, argparse
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from benchmark.coach_split import filter_coach_test_ids
+
 import numpy as np
 import pandas as pd
 import torch as pt
@@ -40,12 +16,15 @@ import torch as pt
 csv.field_size_limit(10**8)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.environ.get("BENCH_RESULTS_DIR", os.path.join(HERE, "results"))
+DATA_ROOT = os.environ.get("DATA_ROOT", os.path.join(os.path.dirname(HERE), "data"))
+ROOT = os.environ.get("BENCH_BASELINES_DIR", os.path.join(DATA_ROOT, "benchmark_baselines"))
+LABELS = os.environ.get("BENCH_LABELS_DIR", os.path.join(HERE, "labels"))
+OUTPUT = os.environ.get("BENCH_RESULTS_DIR", os.path.join(HERE, "results"))
 # Raw baseline-tool outputs for coach420 (p2rank residues.csv, fpocket pocket dirs, GrASP
 # colored pdbs, ProtGeoNet fold pkls) are NOT part of this repo -- results/ligand/{method}/
-# only holds this script's own (already-scored) output. Point COACH420_RAW_DIR at wherever
-# you reproduced those raw runs; see docs/DATA.md.
-COACH420_RAW_DIR = os.environ.get("COACH420_RAW_DIR", os.path.join(HERE, "results", "ligand", "_raw"))
+# only holds this script's own (already-scored) output. Point COACH_RAW_DIR at wherever
+# you reproduced those raw runs; see benchmark/EVAL_SCRIPTS.md.
+COACH_RAW_DIR = os.environ.get("COACH_RAW_DIR", os.path.join(ROOT, "ligand_raw"))
 bc_score_names = ['acc', 'ppv', 'npv', 'tpr', 'tnr', 'mcc', 'auc', 'std']
 
 # --------------------------------------------------------------------------
@@ -53,7 +32,7 @@ bc_score_names = ['acc', 'ppv', 'npv', 'tpr', 'tnr', 'mcc', 'auc', 'std']
 # --------------------------------------------------------------------------
 def bc_scoring(y, p):
     """y,p : (N,1) tensors. returns (8,1)."""
-    q = pt.round(p)
+    q = (p >= .5).to(p.dtype)
     TP = pt.sum(q * y, dim=0); TN = pt.sum((1-q)*(1-y), dim=0)
     FP = pt.sum(q*(1-y), dim=0); FN = pt.sum((1-q)*y, dim=0)
     P = pt.sum(y, dim=0); N = pt.sum(1-y, dim=0)
@@ -86,14 +65,8 @@ def cal_JS_div(p, q, eps=1e-12):
     kl_qm = q*pt.log(q/m)+(1-q)*pt.log((1-q)/(1-m))
     return (.5*(kl_pm+kl_qm)).mean().item()
 def cal_ICC2_1(p, q):
-    X = pt.stack([p.squeeze(), q.squeeze()], dim=1)
-    if X.shape[0] < 2: return float('nan')
-    n, k = X.shape
-    mean_r = X.mean(0); mean_s = X.mean(1); mean_all = X.mean()
-    MSR = k*pt.var(mean_s, unbiased=True)
-    MSC = n*pt.var(mean_r, unbiased=True)
-    MSE = pt.var(X-mean_s[:, None]-mean_r[None, :]+mean_all, unbiased=True)
-    return ((MSR-MSE)/(MSR+(k-1)*MSE+k*(MSC-MSE)/n)).item()
+    from src.metrics import icc_a1
+    return icc_a1(p, q)
 
 # --------------------------------------------------------------------------
 # alignment (pairwise, subprocess clustalo)
@@ -239,17 +212,17 @@ def seq_and_atommap(pdb):
     return seq, seqidx, atom2res
 
 _COACH_IDS = None
-def coach420_ids():
+def coach_test_ids():
     global _COACH_IDS
     if _COACH_IDS is None:
-        lab = pd.read_csv(BENCH["coach420"]["label"][1])
-        _COACH_IDS = sorted({f"{s[:4].upper()}_{s[4:].upper()}" for s in lab["PDB ID"].astype(str)})
+        lab = pd.read_csv(BENCH["coach_test"]["label"][1])
+        _COACH_IDS = filter_coach_test_ids({f"{s[:4].upper()}_{s[4:].upper()}" for s in lab["PDB ID"].astype(str)}, require_all=True)
     return _COACH_IDS
 
 def load_p2rank(side):
     d = {}
-    rdir = os.path.join(COACH420_RAW_DIR, "prank_res", side)
-    for idx in coach420_ids():
+    rdir = os.path.join(COACH_RAW_DIR, "prank_res", side)
+    for idx in coach_test_ids():
         p = os.path.join(rdir, f"{idx}.pdb_residues.csv")
         if not os.path.isfile(p): continue
         df = pd.read_csv(p); df.columns = df.columns.str.strip()
@@ -266,8 +239,8 @@ def load_p2rank(side):
 
 def load_fpocket(side):
     d = {}
-    sdir = os.path.join(COACH420_RAW_DIR, "staging", side)
-    for idx in coach420_ids():
+    sdir = os.path.join(COACH_RAW_DIR, "staging", side)
+    for idx in coach_test_ids():
         pdb = os.path.join(sdir, f"{idx}.pdb"); out = os.path.join(sdir, f"{idx}_out", "pockets")
         if not os.path.isfile(pdb) or not os.path.isdir(out): continue
         seq, seqidx, atom2res = seq_and_atommap(pdb)
@@ -287,8 +260,8 @@ def load_fpocket(side):
 def load_grasp(side):
     """GrASP colored PDB: per-residue = max b-factor over atoms."""
     d = {}
-    cdir = os.path.join(COACH420_RAW_DIR, "grasp_res", f"{side}_colored" if side == "bound" else "predict_colored")
-    for idx in coach420_ids():
+    cdir = os.path.join(COACH_RAW_DIR, "grasp_res", f"{side}_colored" if side == "bound" else "predict_colored")
+    for idx in coach_test_ids():
         p, c = idx.rsplit("_", 1)
         cands = [os.path.join(cdir, f"{idx}_probs.pdb"),
                  os.path.join(cdir, f"{p.lower()}_{c.lower()}_probs.pdb"),
@@ -314,11 +287,11 @@ def load_grasp(side):
 
 def load_protgeonet(side):
     """ProtGeoNet output pkl = {'df': DataFrame[fold,protein_id,seq,pred], 'meta':..}.
-    Average per-residue `pred` over the 10 folds; protein_id matches coach420_ids()."""
+    Average per-residue `pred` over the 10 folds; protein_id matches coach_test_ids()."""
     fn = "coach420_420_ProtGeoNet_bound_output.pkl" if side == "bound" else "coach420_420_ProtGeoNet_af3_output.pkl"
-    raw = pickle.load(open(os.path.join(COACH420_RAW_DIR, "protgeonet", fn), "rb"))
+    raw = pickle.load(open(os.path.join(COACH_RAW_DIR, "protgeonet", fn), "rb"))
     df = raw["df"] if isinstance(raw, dict) and "df" in raw else raw
-    ids = coach420_ids()
+    ids = coach_test_ids()
     nid = {re.sub(r'[^A-Za-z0-9]', '', i).upper(): i for i in ids}
     d = {}
     for pid, g in df.groupby("protein_id"):
@@ -333,28 +306,30 @@ def load_protgeonet(side):
 # benchmark configuration
 # --------------------------------------------------------------------------
 def P(*a): return os.path.join(ROOT, *a)
+def L(*parts): return os.path.join(LABELS, *parts)
+
 BENCH = {
- "MaSIF-53": dict(itype="protein", label=("fasta", P("protein", "masif-53-label.txt")), methods={
+ "MaSIF-53": dict(itype="protein", label=("fasta", L("protein", "masif-53-label.txt")), methods={
      "MaSIF":   lambda: (load_masif_csv(P("protein", "masif", "scores_exp.csv")),
                          load_masif_csv(P("protein", "masif", "scores_pred.csv"))),
      "PeSTo":   lambda: (load_pesto_pkl(P("protein", "pesto", "masif53_bound_pesto_article.pkl")),
                          load_pesto_pkl(P("protein", "pesto", "masif53_pred_pesto_article.pkl"))),
  }),
- "DNA-129": dict(itype="DNA/RNA", label=("fasta", P("NN", "DNA-129_Test.txt")), methods={
+ "DNA-129": dict(itype="DNA/RNA", label=("fasta", L("NN", "DNA-129_Test.txt")), methods={
      "GraphSite": lambda: (load_spacecsv(P("NN", "gesite", "DNA-129_from_pdb.csv")),
                            load_spacecsv(P("NN", "gesite", "DNA-129_from_seq.csv"))),
  }),
- "RNA-117": dict(itype="DNA/RNA", label=("fasta", P("NN", "RNA-117_Test.txt")), methods={
+ "RNA-117": dict(itype="DNA/RNA", label=("fasta", L("NN", "RNA-117_Test.txt")), methods={
      "GraphSite": lambda: (load_spacecsv(P("NN", "gesite", "RNA-117_from_pdb.csv")),
                            load_spacecsv(P("NN", "gesite", "RNA-117_from_seq.csv"))),
  }),
- "Zn-59": dict(itype="ion", label=("fasta", P("ion", "Zn-59_Test.txt")), methods={
+ "Zn-59": dict(itype="ion", label=("fasta", L("ion", "Zn-59_Test.txt")), methods={
      "Metal3D":  lambda: (load_commacsv(P("ion", "metal3d_results", "labels_shell_3.5A.csv")),
                           load_commacsv(P("ion", "metal3d_results_predicted", "labels_shell_3.5A.csv"))),
  }),
  # dynamic_label: ref_seq = predict_seq (no fixed reference sequence file); labels are
  # decoded per-chain from the token field in coach420_label.csv. See coach420_labels_for_refseq.
- "coach420": dict(itype="ligand", label=("coach420csv", P("ligand", "coach420_label.csv")), methods={
+ "coach_test": dict(itype="ligand", label=("coach420csv", L("ligand", "coach420_label.csv")), methods={
      "p2rank":     lambda: (load_p2rank("bound"), load_p2rank("predict")),
      "fpocket":    lambda: (load_fpocket("bound"), load_fpocket("predict")),
      "grasp":      lambda: (load_grasp("bound"), load_grasp("predict")),
@@ -374,14 +349,14 @@ def run(benchmarks):
         label_csv = pd.read_csv(label_path) if dynamic_label else None
         for mname, loader in cfg["methods"].items():
             bd, pr = loader()
-            ids = sorted(set(bd) & set(pr)) if dynamic_label else sorted(set(label) & set(bd) & set(pr))
+            ids = filter_coach_test_ids(set(bd) & set(pr)) if dynamic_label else sorted(set(label) & set(bd) & set(pr))
             if not dynamic_label:
                 miss_b = sorted(set(label) - set(bd)); miss_p = sorted(set(label) - set(pr))
                 print(f"[{bn}/{mname}] eval={len(ids)}  miss_bound={len(miss_b)} miss_pred={len(miss_p)}", flush=True)
                 if miss_b: print("    miss_bound:", miss_b)
                 if miss_p: print("    miss_pred :", miss_p)
             else:
-                print(f"[{bn}/{mname}] eval={len(ids)} (of {len(coach420_ids())} chains)", flush=True)
+                print(f"[{bn}/{mname}] eval={len(ids)} (of {len(coach_test_ids())} chains)", flush=True)
             Y, PB, PP = [], [], []
             for cid in ids:
                 bseq, bsc = bd[cid]; pseq, psc = pr[cid]
@@ -454,7 +429,7 @@ def write_csv(rows, path):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--benchmarks", nargs="*", default=list(BENCH))
-    ap.add_argument("--outdir", default=ROOT)
+    ap.add_argument("--outdir", default=OUTPUT)
     args = ap.parse_args()
     pc, sm, aligned = run(args.benchmarks)
     os.makedirs(args.outdir, exist_ok=True)

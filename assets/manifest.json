@@ -1,0 +1,141 @@
+{
+  "schema": "glauri_release_assets_v1",
+  "main_model": "GLAURI",
+  "files": [
+    {
+      "root": "repo",
+      "path": "model/GLAURI/model_best_auc.pt",
+      "sha256": "256a07f12616aeaadf08bf9bf145dc7d0e3be76ab9301d3a74c88e2ce3a0fbfd",
+      "size_bytes": 9761705
+    },
+    {
+      "root": "repo",
+      "path": "curation/train_m.pkl",
+      "sha256": "bb0b333da6a62ce9db7d4b44dbbfec0ad3af9a61b2bf8e695c956bcffa96d91c",
+      "size_bytes": 2373970
+    },
+    {
+      "root": "repo",
+      "path": "curation/valid_m.pkl",
+      "sha256": "e014692e688d50611b93a36760574689ff09c79fa4b12b4af2eb11fa1eaebb02",
+      "size_bytes": 2373970
+    },
+    {
+      "root": "repo",
+      "path": "curation/test_m.pkl",
+      "sha256": "b1df3a81c60d37cf2328e802f0b17ab3f0154aa4c980d4c3b47ebe08fe2fcac2",
+      "size_bytes": 2373970
+    },
+    {
+      "root": "repo",
+      "path": "curation/train_weight.pkl",
+      "sha256": "9a4e72bf8435b924a546d52f8585dc6cc5a54d7780caf17319ae68f34c4e4952",
+      "size_bytes": 1772554
+    },
+    {
+      "root": "repo",
+      "path": "curation/coach_test_chains.txt",
+      "sha256": "cc6d676566ab78bc09209653b7fa9e78535e35731d2e7614ee59760c8527b234",
+      "size_bytes": 2940
+    },
+    {
+      "root": "repo",
+      "path": "curation/split_manifest.json",
+      "sha256": "e1ef8cb201090b56a4279ebb699046954487ea523580d9beb571e3740433052f",
+      "size_bytes": 19127
+    },
+    {
+      "root": "data",
+      "path": "all_seq_dict.pkl",
+      "sha256": "20be1af1bf1f01aaa205596fffb90132dca8eea0c4d5b23b9dd6584908656daa",
+      "size_bytes": 289749740
+    },
+    {
+      "root": "data",
+      "path": "label_stores/reference_labels.pkl",
+      "sha256": "a3d54ea348aaa504f722082e351516ebe3dae1baa77a6b66f15243a382c95de5",
+      "size_bytes": 244798309
+    },
+    {
+      "root": "data",
+      "path": "ligand_pocket_interactions.csv.gz",
+      "sha256": "95e24a63a7613a52e520bd3a6cc70bbc29214a2dbebd0d3c9fee75c32becb99e",
+      "size_bytes": 18505993
+    },
+    {
+      "root": "data",
+      "path": "bio_251210.h5",
+      "sha256": null,
+      "size_bytes": 132595508183
+    },
+    {
+      "root": "data",
+      "path": "bio_251210_rsa.h5",
+      "sha256": null,
+      "size_bytes": 3810450283
+    },
+    {
+      "root": "data",
+      "path": "alignment_masks_ca_v1/mask_dict_train.pkl",
+      "sha256": "2f26f0336de4c8afe3a818d930bc5df96df0102045c465a2fe9b1b045ad4927a",
+      "size_bytes": 507026379
+    },
+    {
+      "root": "data",
+      "path": "alignment_masks_ca_v1/mask_dict_valid.pkl",
+      "sha256": "7465eb2898d9e8297e15b672ba609507a18d1ddb4ac046bd86ceacd77811359b",
+      "size_bytes": 67728353
+    },
+    {
+      "root": "repo",
+      "path": "curation/ligand_valid_chains.txt",
+      "sha256": "3846be959c6114e58ffde5452aefcb14766843662a070e360acb62e5de759e2d",
+      "size_bytes": 700
+    },
+    {
+      "root": "repo",
+      "path": "curation/component_membership.json.gz",
+      "sha256": "90e3e508bdf016c3694fdbf936d00fb7ce7beedaceebd5d7e1bf12ab180e8636",
+      "size_bytes": 1007312
+    },
+    {
+      "root": "repo",
+      "path": "curation/curated_validation/manifest.json",
+      "sha256": "1bfee2cb18f47938cf27aaed97bbfd3380b151a8a2ecf52e9752963843c41da0",
+      "size_bytes": 1154
+    },
+    {
+      "root": "repo",
+      "path": "curation/curated_validation/representatives.csv",
+      "sha256": "f68470e1fb64bba9d9dd232049d78088bdf46f99487389e51c80e4d7a2504e39",
+      "size_bytes": 38504
+    },
+    {
+      "root": "repo",
+      "path": "curation/curated_validation/composition.csv",
+      "sha256": "a6e0be3ecd19d07fa72d09b2a8beac524166f636181060ed132bd21e34cb9a30",
+      "size_bytes": 380
+    },
+    {
+      "root": "repo",
+      "path": "curation/curated_validation/labels.pkl",
+      "sha256": "03b1e56762d4956a65208052353ad89b9bd7203d2957d8c59cab755319efe061",
+      "size_bytes": 1857215
+    },
+    {
+      "root": "repo",
+      "path": "curation/curated_validation/input_eligibility_audit.json",
+      "sha256": "26c3b0bdf0ad9d5604fe7af2b6a1570b53cba2b92b4999a2e6ab9d7e0ee64606",
+      "size_bytes": 5702
+    }
+  ],
+  "h5_integrity": "Use ORIGINAL_SHA256SUMS.txt from the separately restored dataset; absent digests are not verified.",
+  "esm_weights": {
+    "source": "EvolutionaryScale/esm3-sm-open-v1",
+    "filename": "data/weights/esm3_sm_open_v1.pth",
+    "sha256": "5ead5a135c658068db6a4f1b933e72d6110992c4668822e1c0e2dcc53e38acd9",
+    "external": true
+  },
+  "benchmark_inputs": "Full COACH420 test; independent four-task curated validation; versioned metadata supplement distributed separately.",
+  "dataset_version": "coach420_curated_v1"
+}

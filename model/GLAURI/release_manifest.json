@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "GLAURI",
+  "checkpoint": "model_best_auc.pt",
+  "checkpoint_sha256": "256a07f12616aeaadf08bf9bf145dc7d0e3be76ab9301d3a74c88e2ce3a0fbfd",
+  "feature_protocol": "ca_ncac_sidechain_v1",
+  "input_policy": {
+    "geometry_mode": "full",
+    "edge_mode": "spatial"
+  },
+  "inference": {
+    "attention_backend": "math",
+    "embedding_dtype": "float32",
+    "gcp_dtype": "float32"
+  },
+  "usage": "inference_only_existing_weights",
+  "evaluation_status": "retrospective_only",
+  "selection_note": "Existing weights were not selected under the validation protocol in this source release.",
+  "effective_config_sha256": "d44504ea77e58376684943d26d682babecd638164289f93f650ff232ba52ac35"
+}

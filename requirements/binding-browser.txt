@@ -1,0 +1,5 @@
+# Optional binding-mode browser only; recorded working Python 3.10 environment.
+# No PyTorch, ESM weights, GPU, or PyMOL installation is needed for web viewing.
+numpy==1.26.4
+h5py==3.14.0
+biopython==1.84

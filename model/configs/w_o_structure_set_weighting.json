@@ -1,0 +1,9 @@
+{
+  "id": "w_o_structure_set_weighting",
+  "paper_name": "w/o structure-set weighting",
+  "changes": {
+    "sampling": {
+      "cluster_balanced": false
+    }
+  }
+}

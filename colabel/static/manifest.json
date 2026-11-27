@@ -1,0 +1,8 @@
+{
+  "package": "3dmol",
+  "version": "3.0.0",
+  "source": "https://registry.npmjs.org/3dmol/-/3dmol-3.0.0.tgz",
+  "sha256": "a886e24944310cea8111915209efb2c1246e327858a898ad56ac90fccc314053",
+  "license": "BSD-3-Clause with included third-party notices",
+  "license_file": "third_party_licenses/3Dmol.txt"
+}

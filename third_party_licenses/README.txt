@@ -1,0 +1,1 @@
+Unmodified upstream source-license texts copied from the installed proteinworkshop0.2.5 and graphein1.7.8 distributions for attribution. Other dependencies keep the licenses included in their own separately installed distributions. No ESM3 model-weight license is replaced by these texts or by the repository MIT license.

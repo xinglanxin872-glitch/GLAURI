@@ -2,12 +2,9 @@
 """Run the GLAURI interface model on a single protein chain and write four
 B-factor-colored output PDBs, one per interface-type channel (protein/nn/ion/ligand).
 
-Reuses the model-loading logic already shipped in benchmark/model_benchmark_eval.py
-(same checkpoint format, same config-snapshot resolution) rather than re-implementing it,
-and the structure/feature pipeline in src/utils_eval.py used by every other eval script
-in this repo (case_study/*, benchmark/*_eval.py).
+Uses src.checkpoint, src.embeddings and src.predict, shared with evaluation.
 
-Output convention (matches case_study/nucleic_6du4's established colorpdb scheme):
+Output convention (per-residue probability output):
   - the scored chain's ATOM residues get their B-factor set to the model's per-residue
     sigmoid probability for that channel, in [0, 1]
   - everything else (other chains, HETATM records, and -- rare, but possible -- residues
@@ -26,7 +23,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import os
 import sys
 
@@ -38,16 +34,15 @@ def parse_args() -> argparse.Namespace:
                      help="Chain ID to score (auto-detected if the file has exactly one polymer chain)")
     ap.add_argument("--model-dir", default=None,
                      help="Checkpoint dir (default: <repo>/model/GLAURI)")
+    ap.add_argument("--checkpoint", default=None,
+                     help="Explicit checkpoint filename within model-dir, e.g. model_last.pt")
     ap.add_argument("--out-prefix", default=None,
                      help="Output path prefix; writes <prefix>-{protein,nn,ion,ligand}.pdb "
                           "(default: <input path without extension>)")
     ap.add_argument("--device", default=None,
                      help="torch device, e.g. cuda:0 / cpu (default: cuda if available else cpu)")
+    ap.add_argument("--embedding-cache-dir", default=None, help="Versioned float32 cache directory (optional)")
     args = ap.parse_args()
-    # Resolve every user-supplied path to absolute BEFORE importing benchmark/model_benchmark_eval
-    # below -- that module chdir's the process to the repo root as an import-time side effect
-    # (needed so its own relative dataset/config paths resolve), which would otherwise silently
-    # break any relative path the caller passed on this script's command line.
     args.pdb = os.path.abspath(args.pdb)
     if args.model_dir:
         args.model_dir = os.path.abspath(args.model_dir)
@@ -88,29 +83,21 @@ def chain_residue_order(pdb_path: str, chain: str) -> list[tuple[int, str, str]]
     return out
 
 
-def align_model_seq_to_pdb(model_seq: str, pdb_residues: list[tuple[int, str, str]],
-                            three_to_one: dict) -> list[tuple[int, str] | None]:
-    """Map each position of `model_seq` (CA_BB output order, backbone-incomplete residues
-    already dropped) back onto (resnum, icode) in `pdb_residues` (full file-order list,
-    nothing dropped). CA_BB only ever *removes* residues, never reorders/duplicates them,
-    so model_seq is guaranteed a subsequence of the pdb's own sequence -- a single forward
-    two-pointer scan recovers the exact mapping unambiguously.
-    """
-    mapping: list[tuple[int, str]] = []
-    j = 0
-    for aa in model_seq:
-        while j < len(pdb_residues) and three_to_one.get(pdb_residues[j][2], "X") != aa:
-            j += 1
-        if j >= len(pdb_residues):
-            raise SystemExit(
-                f"could not align model output (len={len(model_seq)}) back onto the PDB's own "
-                f"chain sequence (len={len(pdb_residues)}) at model position {len(mapping)} "
-                f"-- CA_BB preprocessing dropped/reordered more than expected, refusing to "
-                f"silently write a possibly-misaligned B-factor column"
-            )
-        mapping.append((pdb_residues[j][0], pdb_residues[j][1]))
-        j += 1
-    return mapping
+def node_positions_to_residues(pdb_path, chain, positions, atom_name):
+    """Map by exact named-atom coordinates; repeated sequence letters cannot shift scores."""
+    import numpy as np
+    from scipy.spatial import cKDTree
+    coordinates=[];residues=[]
+    for line in open(pdb_path):
+        if line.startswith('ATOM') and line[21]==chain and line[12:16].strip()==atom_name:
+            coordinates.append([float(line[30:38]),float(line[38:46]),float(line[46:54])])
+            residues.append((int(line[22:26]),line[26]))
+    if not coordinates:raise ValueError(f'No {atom_name} coordinates for chain {chain}')
+    distances,indices=cKDTree(np.asarray(coordinates)).query(np.asarray(positions),k=1)
+    if np.any(distances>0.002):raise ValueError('Cannot map model nodes onto named PDB atom coordinates')
+    result=[residues[int(i)] for i in indices]
+    if len(set(result))!=len(result):raise ValueError('Multiple model nodes map to one PDB residue')
+    return result
 
 
 def write_channel_pdb(pdb_path: str, chain: str, scores_by_res: dict[tuple[int, str], float],
@@ -134,57 +121,45 @@ def write_channel_pdb(pdb_path: str, chain: str, scores_by_res: dict[tuple[int, 
 
 def main() -> None:
     args = parse_args()
+    # The residue writer operates on PDB records; convert CIF/gzip inputs explicitly.
+    if args.pdb.lower().endswith(('.cif','.mmcif','.gz')):
+        import atexit, tempfile, gemmi
+        original=args.pdb
+        if args.out_prefix is None:
+            base=original[:-3] if original.lower().endswith('.gz') else original
+            args.out_prefix=os.path.splitext(base)[0]
+        handle=tempfile.NamedTemporaryFile(suffix='.pdb',delete=False);handle.close()
+        converted=gemmi.read_structure(original);converted.setup_entities()
+        converted.write_minimal_pdb(handle.name)
+        args.pdb=handle.name
+        atexit.register(lambda: os.path.exists(handle.name) and os.unlink(handle.name))
 
     repo_root = os.path.dirname(os.path.abspath(__file__))
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
 
     import torch as pt
-    from Bio.Data.IUPACData import protein_letters_3to1
-    from src.utils_eval import process_structure, process_seq_batch, inference
-    from src.emb_cache import LazyPLMPack, get_cached_embedding
-
-    three_to_one = {k.upper(): v for k, v in protein_letters_3to1.items()}
-
-    spec = importlib.util.spec_from_file_location(
-        "_model_benchmark_eval", os.path.join(repo_root, "benchmark", "model_benchmark_eval.py"))
-    mbe = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mbe)  # NOTE: chdir's the process to repo_root -- our paths are absolute already
-
-    if args.device:
-        mbe.DEVICE = pt.device(args.device)
-    device = mbe.DEVICE
-
-    model_dir = args.model_dir or os.path.join(repo_root, "model", "GLAURI")
-    print(f"[infer_one] loading model from {model_dir} (device={device})")
-    model, cd, cm, frame, plm_type, fusion, need_rsa = mbe.load_model(model_dir)
+    from src.checkpoint import load_checkpoint
+    from src.embeddings import EmbeddingProvider
+    from src.predict import predict_structure
+    loaded = load_checkpoint(args.model_dir, args.checkpoint, args.device)
+    model, cd, cm, frame, plm_type, fusion, need_rsa = loaded.legacy_tuple()
+    device = next(model.parameters()).device
+    model_dir = os.path.dirname(loaded.metadata['checkpoint_path'])
+    provider = EmbeddingProvider(device, backend='math', directory=args.embedding_cache_dir)
 
     chain = args.chain or detect_single_chain(args.pdb)
     print(f"[infer_one] scoring chain {chain!r} of {args.pdb}")
 
-    structure = process_structure(args.pdb, chainid=f"{chain}:0")
-    if not isinstance(structure, dict):
-        raise SystemExit(f"failed to load chain {chain!r} from {args.pdb} "
-                          f"(process_structure returned {structure!r} -- check the chain ID)")
-
-    ff = cd["features_flags"]
-    pre = cd.get("preprocess") or None
-    mnn = cd.get("max_num_nn", 64)
-    data_list, seq = process_seq_batch(structure, ff, pre, frame, mnn, with_rsa=need_rsa)
-    print(f"[infer_one] {len(seq)} residues scored (of "
-          f"{len(chain_residue_order(args.pdb, chain))} total ATOM residues in chain {chain!r})")
-
-    plm_pack = LazyPLMPack(device, plm_type) if plm_type else None
-    emb = get_cached_embedding(seq, device, plm_type, plm_pack) if plm_type else None
-
-    pc = inference(model, device, data_list, frame, mask=None, plm_embedding=emb, plm_fusion=fusion)
+    pc, seq, node_positions = predict_structure(loaded, args.pdb, chain, provider)
+    print(f"[infer_one] {len(seq)} residues scored")
     # pc columns: [1-max(p), protein, nn(DNA/RNA), ion, ligand] -- see model/main.py's
     # task_names = ("protein", "nucleic_acid", "ion", "ligand"), same r_types column order
     # used throughout this repo (config_data['r_types'], colabel's --contact-class, etc.)
     channels = {"protein": pc[:, 1], "nn": pc[:, 2], "ion": pc[:, 3], "ligand": pc[:, 4]}
 
-    pdb_residues = chain_residue_order(args.pdb, chain)
-    res_mapping = align_model_seq_to_pdb(seq, pdb_residues, three_to_one)
+    anchor='CA' if cd.get('feature_protocol')=='ca_ncac_sidechain_v1' else 'N'
+    res_mapping=node_positions_to_residues(args.pdb,chain,node_positions,anchor)
 
     out_prefix = args.out_prefix or os.path.splitext(args.pdb)[0]
     out_dir = os.path.dirname(out_prefix)
@@ -199,6 +174,17 @@ def main() -> None:
         print(f"[infer_one] wrote {out_path}  (n={len(vals)}, "
               f"mean={sum(vals)/len(vals):.3f}, max={max(vals):.3f}, "
               f"n>=0.5={sum(1 for v in vals if v >= 0.5)})")
+    import csv,json,hashlib
+    with open(out_prefix+'-scores.csv','w',newline='') as stream:
+        writer=csv.writer(stream);writer.writerow(['node_index','chain','resnum','icode','protein','nn','ion','ligand'])
+        for i,(resnum,icode) in enumerate(res_mapping):
+            writer.writerow([i,chain,resnum,icode,*[format(float(channels[name][i]),'.17g') for name in ['protein','nn','ion','ligand']]])
+    checkpoint_path=loaded.metadata['checkpoint_path']
+    with open(out_prefix+'-inference.json','w') as stream:
+        json.dump(dict(model_dir=model_dir,checkpoint_path=checkpoint_path,checkpoint_sha256=hashlib.sha256(open(checkpoint_path,'rb').read()).hexdigest(),
+                       feature_protocol=cd.get('feature_protocol','legacy_nodes_angles_sidechain_v1_20261102'),
+                       input_policy=loaded.metadata['input_policy'],embedding_protocol=provider.protocol,
+                       nodes=len(res_mapping),chain=chain,scores_csv=os.path.basename(out_prefix+'-scores.csv')),stream,indent=2)
 
 
 if __name__ == "__main__":

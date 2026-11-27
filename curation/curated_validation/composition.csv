@@ -1,0 +1,5 @@
+interface,candidate_positive_clusters,selected_clusters,n_residues,positive_residues,positive_fraction,length_min,length_median,length_max
+protein,1884,100,25644,3462,0.1350023397285915,48,202.5,786
+nucleic,140,100,29078,2297,0.07899442877777013,53,232.0,949
+ion,902,100,31296,599,0.01913982617586912,67,285.0,934
+ligand,1055,100,30539,1432,0.046890860866433084,48,270.0,802

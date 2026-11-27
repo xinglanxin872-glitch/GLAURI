@@ -1,23 +1,11 @@
 #!/usr/bin/env python3
-"""Run OUR interface model (PeSTo or gcp frame) on all 5 benchmark tasks (protein,
-DNA/RNA x2, ion, ligand), scored with the same pairwise alignment as bench_eval.py.
+"""Evaluate the supplied GLAURI best-AUC checkpoint on five benchmark tasks.
 
-pc = [1-max, protein, DNA/RNA, ion, ligand]; per-set channel:
-  MaSIF-53 -> col 1 (protein), DNA-129/RNA-117 -> col 2 (DNA/RNA), Zn-59 -> col 3 (ion),
-  coach420 -> col 4 (ligand, and the only set scored on all 4 foreground columns).
+Tasks: MaSIF-53, DNA-129, RNA-117, Zn-59, coach_test. Ligand labels and raw
+structures retain their source filenames, but membership is restricted to the
+complete COACH420 list before caching, inference and scoring.
 
-Usage (boltz):
-  python model_benchmark_eval.py --model-dir <dir> [--tag T] [--sets MaSIF-53,DNA-129,...]
-  python model_benchmark_eval.py --model-dir <dir> --sets coach420 --stage struct|emb|infer|all
-
-2026-08: merged coach420_ourmodel_eval.py into this script as a 5th SET entry
-(cache=True), so all 5 tasks share one driver -- results/ is organized uniformly per
-interface type now, the eval script covering them should be too. coach420 keeps its own
-3-stage struct/emb/infer disk cache (SETS["coach420"]["cache"]=True): 420 chains with
-expensive ESM embeddings are worth persisting across repeated runs against different
-checkpoints; the other 4 sets are cheap enough to run in a single pass, unchanged.
-coach420 also keeps its own output writer (4 foreground columns vs. the 1 column/set the
-other 4 sets score) -- forcing both into one row format would obscure more than it'd share.
+python benchmark/model_benchmark_eval.py --sets coach_test --stage all
 """
 import os, sys, re, glob, pickle, tempfile, subprocess, types, argparse
 import numpy as np
@@ -25,9 +13,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 # This script imports the model/eval internals as a package rooted one level up.
 REPO = os.environ.get("GLAURI_REPO_ROOT", os.path.dirname(HERE))
-sys.path.insert(0, REPO); os.chdir(REPO)
+sys.path.insert(0, REPO)
 _stub = types.ModuleType("Bio.Align.Applications"); _stub.ClustalOmegaCommandline = object
 sys.modules["Bio.Align.Applications"] = _stub
+
+from benchmark.coach_split import filter_coach_test_ids
 
 import torch as pt, pandas as pd, h5py
 from glob import glob as _glob
@@ -38,29 +28,31 @@ from model.model import GCPNetModel
 from sklearn import metrics
 
 RESULTS = os.environ.get("BENCH_RESULTS_DIR", os.path.join(HERE, "results"))
+LABELS = os.environ.get("BENCH_LABELS_DIR", os.path.join(HERE, "labels"))
+DATA_ROOT = os.environ.get("DATA_ROOT", os.path.join(REPO, "data"))
 DEVICE = pt.device(os.environ.get("EVAL_DEVICE", "cuda:0"))
 bc_score_names = ['acc', 'ppv', 'npv', 'tpr', 'tnr', 'mcc', 'auc', 'std']
 
 # Raw bound/predicted structures are not part of this repo (only already-scored results
-# are); point these at wherever you reproduced them. See docs/DATA.md.
-STD_STRUCT_DIR = os.environ.get("STD_STRUCT_DIR", os.path.join(HERE, "results", "_raw_structures"))
-COACH420_STRUCT_DIR = os.environ.get("COACH420_STRUCT_DIR", os.path.join(HERE, "results", "_raw_structures", "coach420"))
+# are); point these at wherever you reproduced them. See benchmark/EVAL_SCRIPTS.md.
+STD_STRUCT_DIR = os.environ.get("STD_STRUCT_DIR", os.path.join(DATA_ROOT, "benchmark_structures"))
+COACH_STRUCT_DIR = os.environ.get("COACH_STRUCT_DIR", os.path.join(DATA_ROOT, "benchmark_structures", "coach420"))
 
 SETS = {
  "MaSIF-53": dict(itype="protein", col=1, cache=False,
-                   label=os.path.join(RESULTS, "protein", "masif-53-label.txt"),
+                   label=os.path.join(LABELS, "protein", "masif-53-label.txt"),
                    bound=os.path.join(STD_STRUCT_DIR, "MaSIF_53_pdb")),
  "DNA-129":  dict(itype="DNA/RNA", col=2, cache=False,
-                   label=os.path.join(RESULTS, "NN", "DNA-129_Test.txt"),
+                   label=os.path.join(LABELS, "NN", "DNA-129_Test.txt"),
                    bound=os.path.join(STD_STRUCT_DIR, "DNA-129_pdb")),
  "RNA-117":  dict(itype="DNA/RNA", col=2, cache=False,
-                   label=os.path.join(RESULTS, "NN", "RNA-117_Test.txt"),
+                   label=os.path.join(LABELS, "NN", "RNA-117_Test.txt"),
                    bound=os.path.join(STD_STRUCT_DIR, "RNA-117_pdb")),
  "Zn-59":    dict(itype="ion", col=3, cache=False,
-                   label=os.path.join(RESULTS, "ion", "Zn-59_Test.txt"),
+                   label=os.path.join(LABELS, "ion", "Zn-59_Test.txt"),
                    bound=os.path.join(STD_STRUCT_DIR, "metal_3d_pdb")),
- "coach420": dict(itype="ligand", col=4, cache=True,
-                   label=os.path.join(RESULTS, "ligand", "coach420_label.csv")),
+ "coach_test": dict(itype="ligand", col=4, cache=True,
+                   label=os.path.join(LABELS, "ligand", "coach420_label.csv")),
 }
 
 PRED = {}
@@ -141,7 +133,7 @@ def align_anchor(ref, b, p):
 
 # ----------------------------- shared: scoring -----------------------------
 def bc_scoring(y, p):
-    q = pt.round(p)
+    q = (p >= .5).to(p.dtype)
     TP = pt.sum(q*y, 0); TN = pt.sum((1-q)*(1-y), 0); FP = pt.sum(q*(1-y), 0); FN = pt.sum((1-q)*y, 0)
     P = pt.sum(y, 0); N = pt.sum(1-y, 0)
     def sf(v): v = v.clone(); v[pt.isinf(v)] = float('nan'); return v
@@ -163,74 +155,14 @@ def cal_JS_div(p, q, eps=1e-12):
     p = p.double().clamp(eps, 1-eps); q = q.double().clamp(eps, 1-eps); m = .5*(p+q)
     return (.5*((p*pt.log(p/m)+(1-p)*pt.log((1-p)/(1-m)))+(q*pt.log(q/m)+(1-q)*pt.log((1-q)/(1-m))))).mean().item()
 def cal_ICC2_1(p, q):
-    X = pt.stack([p.double().squeeze(), q.double().squeeze()], 1)
-    if X.shape[0] < 2: return float('nan')
-    n, k = X.shape; mr = X.mean(0); ms = X.mean(1); ma = X.mean()
-    MSR = k*pt.var(ms, unbiased=True); MSC = n*pt.var(mr, unbiased=True)
-    MSE = pt.var(X-ms[:, None]-mr[None, :]+ma, unbiased=True)
-    return ((MSR-MSE)/(MSR+(k-1)*MSE+k*(MSC-MSE)/n)).item()
+    from src.metrics import icc_a1
+    return icc_a1(p, q)
 
 # ----------------------------- shared: model loading -----------------------------
-def load_model(model_dir):
-    """Load config (preferring the training-time effective snapshot) + checkpoint.
-    Returns (model, cfg_data, cfg_model, frame, plm_type, plm_fusion, need_rsa)."""
-    cfg_candidates = [p for p in _glob(os.path.join(model_dir, "*_config*.py"))
-                       if not p.endswith("_base_config.py")]
-    if not cfg_candidates:
-        cfg_candidates = [os.path.join(REPO, "model", "config_baseline.py")]
-    cfg_path = max(cfg_candidates)
-
-    # cfg_path (the training-time override snapshot, or the config_baseline.py fallback)
-    # does `from config import config_data, ...` at its top -- it needs an actual module
-    # named "config" resolvable via sys.modules; nothing on sys.path provides a top-level
-    # `config` module in this repo's flat layout (main.py only gets away with the bare
-    # `import config` inside these files because it's launched with cwd=model/, putting
-    # model/ implicitly on sys.path[0] -- this script runs from REPO root instead). Load
-    # the matching base-config snapshot (same dir, *_base_config.py) under the name
-    # "config" first so the override's import resolves via the sys.modules cache; fall
-    # back to the live model/config.py for runs that predate snapshotting.
-    base_candidates = _glob(os.path.join(model_dir, "*_base_config.py"))
-    base_path = max(base_candidates) if base_candidates else os.path.join(REPO, "model", "config.py")
-    # Old snapshots predate the src.data_encoding_redefine -> src.data_encoding rename
-    # (pure rename, verified symbol-identical at the time) and still say the old name;
-    # don't touch the snapshot file itself (it's the historical record of what actually
-    # trained this checkpoint) -- alias it instead so `from src.data_encoding_redefine
-    # import ...` resolves to the current module.
-    if "src.data_encoding_redefine" not in sys.modules:
-        import src.data_encoding as _de
-        sys.modules["src.data_encoding_redefine"] = _de
-    base_spec = importlib.util.spec_from_file_location("config", base_path)
-    base_mod = importlib.util.module_from_spec(base_spec)
-    sys.modules["config"] = base_mod
-    base_spec.loader.exec_module(base_mod)
-
-    spec = importlib.util.spec_from_file_location("custom_config", cfg_path)
-    cfg = importlib.util.module_from_spec(spec); spec.loader.exec_module(cfg)
-    cm, cd = cfg.config_model, cfg.config_data
-    frame = cm.get("name", "gcp"); plm_type = cd.get("plm", None); fusion = cd.get("plm_fusion", "concat")
-    need_rsa = cd.get("rsa_filepath") is not None  # cat36rsa: RSA is computed on the fly at inference time
-    if frame != "gcp":
-        raise ValueError(
-            f"model/ 已重构为仅 gcp 通路(PeSTo 类已删除); 该 checkpoint config 声明 frame={frame!r}, 无法加载"
-        )
-
-    model = GCPNetModel(cm)
-    # WSL2 workaround: synchronous H2D copies inside pt.load(map_location=cuda) occasionally
-    # spin forever on this box (driver 591.86 / torch dev build). Warm the context first,
-    # then load on CPU; Module.to(DEVICE) below has been reliable. "cuda_warmup_ok" doubles
-    # as the pipeline watchdog marker.
-    _w = pt.zeros(4, device=DEVICE); pt.cuda.synchronize(); del _w
-    print("cuda_warmup_ok", flush=True)
-    sd = pt.load(os.path.join(model_dir, "model.pt"), map_location="cpu")
-    # concat_late esm_mlp: older ckpts have no Dropout module (2nd Linear at index .2),
-    # current model.py inserts Dropout(0.0) at .2 (a no-op), shifting the Linear to .3.
-    want = set(model.state_dict().keys())
-    if "esm_mlp.3.weight" in want and "esm_mlp.2.weight" in sd and "esm_mlp.3.weight" not in sd:
-        for k in ("weight", "bias"):
-            sd[f"esm_mlp.3.{k}"] = sd.pop(f"esm_mlp.2.{k}")
-    model.load_state_dict(sd); model = model.eval().to(DEVICE)
-    print(f"config={cfg_path}\nframe={frame} plm={plm_type} fusion={fusion} need_rsa={need_rsa}")
-    return model, cd, cm, frame, plm_type, fusion, need_rsa
+def load_model(model_dir=None, checkpoint=None, device=None):
+    """Compatibility wrapper around the shared checkpoint loader."""
+    from src.checkpoint import load_checkpoint
+    return load_checkpoint(model_dir, checkpoint, device or DEVICE).legacy_tuple()
 
 # ----------------------------- MaSIF-53/DNA-129/RNA-117/Zn-59: single-pass -----------------------------
 def run_std_set(sname, s, model, cd, frame, plm_type, fusion, need_rsa, plm_pack, tag, outdir, limit=0):
@@ -238,7 +170,7 @@ def run_std_set(sname, s, model, cd, frame, plm_type, fusion, need_rsa, plm_pack
     ff = cd["features_flags"]; pre = cd.get("preprocess") or None; mnn = cd.get("max_num_nn", 64)
 
     def infer_full(struct):
-        dl, seq = process_seq_batch(struct, ff, pre, frame, mnn, with_rsa=need_rsa)
+        dl, seq = process_seq_batch(struct, ff, pre, frame, mnn, with_rsa=need_rsa, protocol=cd.get('feature_protocol', 'legacy_nodes_angles_sidechain_v1_20261102'))
         emb = get_cached_embedding(seq, DEVICE, plm_type, plm_pack) if plm_type else None
         pc = inference(model, DEVICE, dl, frame, mask=None, plm_embedding=emb, plm_fusion=fusion)
         return pc, seq
@@ -281,14 +213,14 @@ CLASS_NAMES = ["protein", "DNA/RNA", "ion", "ligand"]
 LIG = 4  # ligand column in the 5-wide pc/yc ([bg,protein,DNA/RNA,ion,ligand])
 
 def _coach420_paths():
-    coach_pdb_dir = os.path.join(COACH420_STRUCT_DIR, "coach420_pdb")          # primary bound (full 420)
-    receptor_dir = os.path.join(COACH420_STRUCT_DIR, "receptor_pdb_coach420")  # fallback for 48 chain-mismatches
-    af3_dir = os.path.join(COACH420_STRUCT_DIR, "coach24_af3")
+    coach_pdb_dir = os.path.join(COACH_STRUCT_DIR, "coach420_pdb")          # primary bound (full 420)
+    receptor_dir = os.path.join(COACH_STRUCT_DIR, "receptor_pdb_coach420")  # fallback for 48 chain-mismatches
+    af3_dir = os.path.join(COACH_STRUCT_DIR, "coach24_af3")
     return coach_pdb_dir, receptor_dir, af3_dir
 
-def coach420_ids(label_csv_path):
+def coach_test_ids(label_csv_path):
     lab = pd.read_csv(label_csv_path)
-    return sorted({f"{s[:4].upper()}_{s[4:].upper()}" for s in lab["PDB ID"].astype(str)})
+    return filter_coach_test_ids({f"{s[:4].upper()}_{s[4:].upper()}" for s in lab["PDB ID"].astype(str)}, require_all=True)
 
 def bound_pdb_path(idx):
     coach_pdb_dir, receptor_dir, _ = _coach420_paths()
@@ -304,9 +236,11 @@ def af3_cif_path(idx):
     return os.path.join(af3_dir, key, f"{key}_model.cif")
 
 def stage_struct(ids, struct_pkl):
+    ids = filter_coach_test_ids(ids)
     cache = {}
     if os.path.exists(struct_pkl):
         cache = pickle.load(open(struct_pkl, "rb"))
+    cache = {key: cache[key] for key in filter_coach_test_ids(cache)}
     n_new = n_fail = 0
     for chain in tqdm(ids, desc="struct"):
         cur = cache.get(chain, {})
@@ -335,12 +269,17 @@ def stage_emb(cache, cd, frame, plm_type, emb_h5):
     plm_pack = LazyPLMPack(DEVICE, plm_type)
     n_new = n_skip = 0
     with h5py.File(emb_h5, "a") as hf:
-        for chain in tqdm(cache, desc="emb"):
+        import json
+        protocol=plm_pack.provider.protocol
+        if len(hf) and hf.attrs.get("glauri_embedding_protocol")!=json.dumps(protocol,sort_keys=True):raise ValueError("Embedding H5 protocol differs; use a fresh output directory")
+        hf.attrs["glauri_embedding_protocol"]=json.dumps(protocol,sort_keys=True)
+        hf.attrs["sdpa_backend"]="math"
+        for chain in tqdm(filter_coach_test_ids(cache), desc="emb"):
             if chain in hf: n_skip += 1; continue
             try:
-                _, predict_seq = process_seq_batch(cache[chain]["predict"], ff, pre, frame, mnn)
+                _, predict_seq = process_seq_batch(cache[chain]["predict"], ff, pre, frame, mnn, protocol=cd.get("feature_protocol", "legacy_nodes_angles_sidechain_v1_20261102"))
                 emb = get_cached_embedding(predict_seq, DEVICE, plm_type, plm_pack)
-                arr = emb.detach().to(pt.float16).cpu().numpy()
+                arr = emb.detach().float().cpu().numpy()
             except Exception as e:
                 print(f"  !! emb fail {chain}: {repr(e)[:100]}"); continue
             hf.create_dataset(chain, data=arr, compression="gzip")
@@ -355,10 +294,14 @@ def stage_infer(cache, cd, cm, frame, plm_type, fusion, need_rsa, model, label_c
     label_csv = pd.read_csv(label_csv_path)
     pp_i, pb_i, y_i = [], [], []; aligned = {}; n_eval = n_skip = 0
     with h5py.File(emb_h5, "r") as hf:
-        for chain in tqdm(cache, desc="infer"):
+        import json
+        from src.embeddings import EmbeddingProvider
+        protocol=EmbeddingProvider(DEVICE,backend="math").protocol
+        if hf.attrs.get("glauri_embedding_protocol")!=json.dumps(protocol,sort_keys=True):raise ValueError("Unverified embedding H5")
+        for chain in tqdm(filter_coach_test_ids(cache), desc="infer"):
             try:
-                dl_b, pdb_seq = process_seq_batch(cache[chain]["bound"], ff, pre, frame, mnn, with_rsa=need_rsa)
-                dl_p, predict_seq = process_seq_batch(cache[chain]["predict"], ff, pre, frame, mnn, with_rsa=need_rsa)
+                dl_b, pdb_seq = process_seq_batch(cache[chain]["bound"], ff, pre, frame, mnn, with_rsa=need_rsa, protocol=cd.get('feature_protocol', 'legacy_nodes_angles_sidechain_v1_20261102'))
+                dl_p, predict_seq = process_seq_batch(cache[chain]["predict"], ff, pre, frame, mnn, with_rsa=need_rsa, protocol=cd.get('feature_protocol', 'legacy_nodes_angles_sidechain_v1_20261102'))
                 stem = label_stem(chain)
                 mrow = label_csv[label_csv["PDB ID"].astype(str).str.lower() == stem.lower()]
                 lab_str = "" if mrow.empty else mrow.iloc[0]["Label"]
@@ -392,7 +335,7 @@ def stage_infer(cache, cd, cm, frame, plm_type, fusion, need_rsa, model, label_c
 
 def _to(x): return x.item() if hasattr(x, "item") else float(x)
 
-def write_coach420_outputs(pp_i, pb_i, y_i, aligned, tag, outdir):
+def write_coach_test_outputs(pp_i, pb_i, y_i, aligned, tag, outdir):
     p_b_all = pt.cat(pb_i, 0); p_p_all = pt.cat(pp_i, 0); y_all = pt.cat(y_i, 0)
     sb, sp = [], []
     for ci in range(4):
@@ -400,8 +343,8 @@ def write_coach420_outputs(pp_i, pb_i, y_i, aligned, tag, outdir):
         pb = p_b_all[:, col]; pp = p_p_all[:, col]; y = y_all[:, col]
         s_b = bc_scoring(y.unsqueeze(1), pb.unsqueeze(1)).squeeze().numpy()
         s_p = bc_scoring(y.unsqueeze(1), pp.unsqueeze(1)).squeeze().numpy()
-        f1_b = metrics.f1_score(y.numpy().astype(int), pb.numpy().round())
-        f1_p = metrics.f1_score(y.numpy().astype(int), pp.numpy().round())
+        f1_b = metrics.f1_score(y.numpy().astype(int), (pb.numpy()>=.5))
+        f1_p = metrics.f1_score(y.numpy().astype(int), (pp.numpy()>=.5))
         r = float(pt.mean(y))
         sb.append(np.concatenate([s_b, [f1_b, r]])); sp.append(np.concatenate([s_p, [f1_p, r]]))
     idx = bc_score_names + ["F1", "r"]
@@ -418,39 +361,55 @@ def write_coach420_outputs(pp_i, pb_i, y_i, aligned, tag, outdir):
         for nm, v in zip(bc_score_names, s_p): row[nm + "_p"] = v
         rows.append(row)
     pd.DataFrame(rows).to_csv(os.path.join(outdir, f"{tag}_pVb_score.csv"), index=False)
-    pickle.dump({"coach420": {tag: aligned}}, open(os.path.join(outdir, f"{tag}_aligned.pkl"), "wb"))
+    pickle.dump({"coach_test": {tag: aligned}}, open(os.path.join(outdir, f"{tag}_aligned.pkl"), "wb"))
     print("wrote:", os.path.join(outdir, f"{tag}_bound.csv"), f"{tag}_af3.csv", f"{tag}_pVb_score.csv", f"{tag}_aligned.pkl", sep="\n  ")
     print("\n[ligand] pooled: bound auc=%.3f f1=%.3f | af3 auc=%.3f f1=%.3f" % (
         np.stack(sb).T[6, 3], np.stack(sb).T[8, 3], np.stack(sp).T[6, 3], np.stack(sp).T[8, 3]))
 
-def run_coach420(s, model, cd, cm, frame, plm_type, fusion, need_rsa, tag, outdir, stage="all"):
-    ids = coach420_ids(s["label"])
+def run_coach_test(s, model, cd, cm, frame, plm_type, fusion, need_rsa, tag, outdir, stage="all"):
+    ids = coach_test_ids(s["label"])
     cache_dir = os.path.join(outdir, "_cache")  # struct+emb cache is model-independent, kept across runs
     os.makedirs(cache_dir, exist_ok=True)
-    struct_pkl = os.path.join(cache_dir, "coach420_structures.pkl")
-    emb_h5 = os.path.join(cache_dir, "coach420_emb.h5" if plm_type in (None, "ESM2") else f"coach420_emb_{plm_type}.h5")
+    struct_pkl = os.path.join(cache_dir, "coach_test_structures.pkl")
+    emb_h5 = os.path.join(cache_dir, f"coach_test_emb_{plm_type}.h5")
     cache = stage_struct(ids, struct_pkl)
     if stage in ("all", "emb"):
         stage_emb(cache, cd, frame, plm_type, emb_h5)
     if stage in ("all", "infer"):
         pp_i, pb_i, y_i, aligned = stage_infer(cache, cd, cm, frame, plm_type, fusion, need_rsa, model, s["label"], emb_h5)
-        write_coach420_outputs(pp_i, pb_i, y_i, aligned, tag, outdir)
+        write_coach_test_outputs(pp_i, pb_i, y_i, aligned, tag, outdir)
 
 # ----------------------------- main -----------------------------
 def main():
+    global DEVICE
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model-dir", required=True)
+    ap.add_argument("--model-dir", default=os.path.join(REPO, "model", "GLAURI"))
+    ap.add_argument("--checkpoint", default=None, help="Checkpoint filename or absolute path; defaults to best-AUC weights")
     ap.add_argument("--tag", default=None)
+    ap.add_argument("--device",default=str(DEVICE))
+    ap.add_argument("--output",default=None,help="Explicit output directory; checkpoint identity is checked")
     ap.add_argument("--sets", default=None, help="comma-separated subset of SETS (default: all 5)")
     ap.add_argument("--limit", type=int, default=0, help="std sets only: cap #chains (debug)")
     ap.add_argument("--stage", choices=["all", "struct", "emb", "infer"], default="all",
-                     help="coach420 only: resume from a given stage")
+                     help="COACH420 only: resume from a given stage")
     a = ap.parse_args()
-    tag = a.tag or os.path.basename(a.model_dir.rstrip("/"))
-    outdir = os.path.join(RESULTS, "_runs", f"{tag}_benchmark_out")
-    os.makedirs(outdir, exist_ok=True)
-
-    model, cd, cm, frame, plm_type, fusion, need_rsa = load_model(a.model_dir)
+    import json
+    from src.checkpoint import load_checkpoint
+    DEVICE=pt.device(a.device)
+    loaded=load_checkpoint(a.model_dir,a.checkpoint,DEVICE)
+    model,cd,cm,frame,plm_type,fusion,need_rsa=loaded.legacy_tuple()
+    tag=a.tag or os.path.basename(os.path.abspath(a.model_dir))
+    outdir=a.output or os.path.join(RESULTS,"_runs",f"{tag}_{loaded.metadata['checkpoint_sha256'][:12]}_benchmark_out")
+    from src.embeddings import EmbeddingProvider
+    protocol=dict(checkpoint_sha256=loaded.metadata['checkpoint_sha256'],config_sha256=loaded.metadata['config_sha256'],
+        feature_protocol=loaded.metadata['feature_protocol'],input_policy=loaded.metadata['input_policy'],
+        embeddings=EmbeddingProvider(DEVICE,backend='math').protocol,metric_protocol='icc_a1_residual_df_v1_threshold_ge05')
+    manifest=os.path.join(outdir,'inference_protocol.json')
+    if os.path.isfile(manifest):
+        if json.load(open(manifest))!=protocol:raise ValueError('Output checkpoint/protocol differs')
+    elif os.path.isdir(outdir) and os.listdir(outdir):raise ValueError('Existing output has no verified protocol; choose a new directory')
+    os.makedirs(outdir,exist_ok=True)
+    with open(manifest,'w') as stream:json.dump(protocol,stream,indent=2)
     from src.emb_cache import LazyPLMPack
     plm_pack = LazyPLMPack(DEVICE, plm_type) if plm_type else None
     print(f"model={tag} frame={frame} plm={plm_type} fusion={fusion}")
@@ -460,7 +419,7 @@ def main():
     for sname in sel:
         s = SETS[sname]
         if s["cache"]:
-            run_coach420(s, model, cd, cm, frame, plm_type, fusion, need_rsa, tag, outdir, stage=a.stage)
+            run_coach_test(s, model, cd, cm, frame, plm_type, fusion, need_rsa, tag, outdir, stage=a.stage)
         else:
             row = run_std_set(sname, s, model, cd, frame, plm_type, fusion, need_rsa, plm_pack, tag, outdir, limit=a.limit)
             summary.append(row)
